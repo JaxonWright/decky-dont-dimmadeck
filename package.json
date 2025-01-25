@@ -1,7 +1,7 @@
 {
-  "name": "decky-plugin-template",
+  "name": "dont-dimmadeck",
   "version": "0.0.1",
-  "description": "A template to quickly create decky plugins from scratch, based on TypeScript and webpack",
+  "description": "Disable screen dimming and timeout on a per-app basis",
   "type": "module",
   "scripts": {
     "build": "rollup -c",

@@ -5,7 +5,7 @@
   "api_version": 1,
   "publish": {
     "tags": ["screen-timeout", "screen-dim", "dim", "timeout"],
-    "description": "Disable sceeen dimming and timeout on a per-app basis.",
+    "description": "Disable screen dimming and timeout on a per-app basis.",
     "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/PluginLoader"
   }
 }
