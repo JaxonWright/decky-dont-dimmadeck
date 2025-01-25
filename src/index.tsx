@@ -14,7 +14,7 @@ import {
   // routerHook
 } from "@decky/api"
 import { useState } from "react";
-import { FaShip } from "react-icons/fa";
+import { FaLightbulb } from "react-icons/fa";
 
 // import logo from "../assets/logo.png";
 
@@ -98,13 +98,13 @@ export default definePlugin(() => {
 
   return {
     // The name shown in various decky menus
-    name: "Test Plugin",
+    name: "Don't Dimmadeck",
     // The element displayed at the top of your plugin's menu
-    titleView: <div className={staticClasses.Title}>Decky Example Plugin</div>,
+    titleView: <div className={staticClasses.Title}>Don't Dimmadeck</div>,
     // The content of your plugin's menu
     content: <Content />,
     // The icon displayed in the plugin list
-    icon: <FaShip />,
+    icon: <FaLightbulb />,
     // The function triggered when your plugin unloads
     onDismount() {
       console.log("Unloading")
