@@ -1,11 +1,11 @@
 {
-  "name": "Example Plugin",
-  "author": "John Doe",
+  "name": "Don't Dimmadeck",
+  "author": "Jaxon Wright",
   "flags": ["debug", "_root"],
   "api_version": 1,
   "publish": {
-    "tags": ["template", "root"],
-    "description": "Decky example plugin.",
+    "tags": ["screen-timeout", "screen-dim", "dim", "timeout"],
+    "description": "Disable sceeen dimming and timeout on a per-app basis.",
     "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/PluginLoader"
   }
 }
