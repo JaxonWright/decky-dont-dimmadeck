@@ -1,4 +1,5 @@
-import { steam, Unregisterable } from "./client";
+import { steam } from "./client";
+import type { Unregisterable } from "./client";
 import { decodeScalarFields, encodeFloatField, encodeVarintField, toBase64 } from "./protobuf";
 
 /**
@@ -131,16 +132,41 @@ export function encodeSuspendSettings(timeouts: IdleTimeouts): string {
   ]);
 }
 
+/** Which halves of the settings to write. */
+export interface IdleParts {
+  dim: boolean;
+  suspend: boolean;
+}
+
+export const BOTH_PARTS: IdleParts = { dim: true, suspend: true };
+export const NO_PARTS: IdleParts = { dim: false, suspend: false };
+
+export function partsEqual(a: IdleParts, b: IdleParts): boolean {
+  return a.dim === b.dim && a.suspend === b.suspend;
+}
+
+export function anyPart(parts: IdleParts): boolean {
+  return parts.dim || parts.suspend;
+}
+
 /**
- * Pushes all four timers to Steam. The two halves are independent: if one
- * setter is missing from this Steam build the other still applies, which is
- * better than doing nothing at all.
+ * Pushes timers to Steam, writing only the requested halves.
+ *
+ * Writing only what changed matters: a user who wants sleep prevented but
+ * dimming left alone must not have their dim setting rewritten underneath
+ * them. The two halves are also independent for failure - if one setter is
+ * missing from this Steam build the other still applies.
  */
-export async function applyIdleTimeouts(timeouts: IdleTimeouts): Promise<void> {
+export async function applyIdleTimeouts(
+  timeouts: IdleTimeouts,
+  parts: IdleParts = BOTH_PARTS,
+): Promise<void> {
   const client = steam();
 
   const system = client.System;
-  if (system?.UpdateSettings) {
+  if (!parts.dim) {
+    // Nothing to do for this half.
+  } else if (system?.UpdateSettings) {
     try {
       await system.UpdateSettings(encodeDimSettings(timeouts));
     } catch (error) {
@@ -151,7 +177,9 @@ export async function applyIdleTimeouts(timeouts: IdleTimeouts): Promise<void> {
   }
 
   const settings = client.Settings;
-  if (settings?.SetSetting) {
+  if (!parts.suspend) {
+    // Nothing to do for this half.
+  } else if (settings?.SetSetting) {
     try {
       await settings.SetSetting(encodeSuspendSettings(timeouts));
     } catch (error) {

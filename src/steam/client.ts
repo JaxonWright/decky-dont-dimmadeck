@@ -19,6 +19,22 @@ export interface AppLifetimeNotification {
   bRunning: boolean;
 }
 
+export interface BatteryState {
+  bHasBattery?: boolean;
+  /** EACState: 0 unknown, 1 disconnected, 2 connected, 3 connected slow. */
+  eACState?: number;
+}
+
+interface DisplayManagerApi {
+  /**
+   * Returns CMsgSystemDisplayManagerState. Undocumented and typed as `any` by
+   * @decky/ui - it has been seen as a protobuf buffer, a base64 string of one,
+   * and an already-deserialised object, so callers must handle all three.
+   */
+  GetState?(): Promise<unknown> | unknown;
+  RegisterForStateChanges?(cb: () => void): Unregisterable | undefined;
+}
+
 interface SystemApi {
   /**
    * Applies a base64-encoded, partially populated CMsgSystemManagerSettings.
@@ -27,6 +43,8 @@ interface SystemApi {
   UpdateSettings?(base64: string): Promise<unknown>;
   /** Emits a serialised CMsgSystemManagerSettings whenever it changes. */
   RegisterForSettingsChanges?(cb: (data: ArrayBuffer) => void): Unregisterable;
+  RegisterForBatteryStateChanges?(cb: (state: BatteryState) => void): Unregisterable;
+  DisplayManager?: DisplayManagerApi;
 }
 
 interface SettingsApi {

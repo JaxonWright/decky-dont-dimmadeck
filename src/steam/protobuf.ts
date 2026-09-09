@@ -110,3 +110,67 @@ export function decodeScalarFields(data: ArrayBuffer | Uint8Array): Map<number, 
 
   return fields;
 }
+
+/**
+ * Returns the payload of every length-delimited occurrence of `field`.
+ *
+ * Repeated embedded messages (CMsgSystemDisplayManagerState.displays, say) come
+ * through as one length-delimited field per element, so this hands back a
+ * buffer per element for decodeScalarFields to pick apart.
+ */
+export function decodeRepeatedBytes(
+  data: ArrayBuffer | Uint8Array,
+  field: number,
+): Uint8Array[] {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const found: Uint8Array[] = [];
+  let offset = 0;
+
+  const readVarint = (): number | null => {
+    let result = 0;
+    let shift = 0;
+    while (offset < bytes.length) {
+      const byte = bytes[offset++];
+      result += (byte & 0x7f) * Math.pow(2, shift);
+      if ((byte & 0x80) === 0) return result;
+      shift += 7;
+      if (shift > 63) return null;
+    }
+    return null;
+  };
+
+  while (offset < bytes.length) {
+    const key = readVarint();
+    if (key === null) break;
+    const fieldNumber = Math.floor(key / 8);
+    const wireType = key & 0x7;
+
+    if (wireType === WIRE_LENGTH_DELIMITED) {
+      const length = readVarint();
+      if (length === null || offset + length > bytes.length) break;
+      if (fieldNumber === field) found.push(bytes.subarray(offset, offset + length));
+      offset += length;
+    } else if (wireType === WIRE_VARINT) {
+      if (readVarint() === null) break;
+    } else if (wireType === WIRE_FIXED32) {
+      if (offset + 4 > bytes.length) break;
+      offset += 4;
+    } else if (wireType === WIRE_FIXED64) {
+      if (offset + 8 > bytes.length) break;
+      offset += 8;
+    } else {
+      break;
+    }
+  }
+
+  return found;
+}
+
+/** Encodes a length-delimited field, for tests and for nesting messages. */
+export function encodeBytesField(field: number, payload: number[]): number[] {
+  const out: number[] = [];
+  encodeKey(field, WIRE_LENGTH_DELIMITED, out);
+  encodeVarint(payload.length, out);
+  out.push(...payload);
+  return out;
+}

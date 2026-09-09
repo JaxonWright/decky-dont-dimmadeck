@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  decodeRepeatedBytes,
   decodeScalarFields,
+  encodeBytesField,
   encodeFloatField,
   encodeVarintField,
   toBase64,
@@ -78,4 +80,17 @@ test("base64 encodes the raw bytes", () => {
   const decoded = [...globalThis.atob(toBase64(bytes))].map((c) => c.charCodeAt(0));
 
   assert.deepEqual(decoded, bytes);
+});
+
+test("finds repeated embedded messages", () => {
+  // CMsgSystemDisplayManagerState.displays is field 1, repeated.
+  const internal = [...encodeVarintField(5, 1), ...encodeVarintField(6, 1)];
+  const external = [...encodeVarintField(5, 1), ...encodeVarintField(6, 0)];
+  const bytes = [...encodeBytesField(1, internal), ...encodeBytesField(1, external)];
+
+  const displays = decodeRepeatedBytes(Uint8Array.from(bytes), 1);
+
+  assert.equal(displays.length, 2);
+  assert.equal(decodeScalarFields(displays[0]).get(6)?.varint, 1);
+  assert.equal(decodeScalarFields(displays[1]).get(6)?.varint, 0);
 });
