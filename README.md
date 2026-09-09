@@ -14,11 +14,22 @@ The plugin is not in the Decky store yet. To install it now, build it (see below
 
 Open the Decky menu and pick **Don't Dimmadeck**.
 
-- **Keep awake now** — an immediate override, handy for a long download or an app you have not added yet.
+- **Keep awake now** — an immediate override, handy for a long download or an app you have not added yet. It applies your defaults straight away and ignores the power conditions.
 - **Current game** — toggle this on to keep the screen awake every time this app runs.
-- **Keeping these awake** — everything you have added. Toggle one off to remove it.
+- **Per-app settings** — pick any app you have added and give it its own settings, or leave it following the defaults. This is also where you remove an app.
+- **Defaults** — what every app uses unless it overrides them.
 
-Steam's dim and sleep timers go back to your own settings as soon as the app exits. If you change those settings in Steam while nothing is being kept awake, the plugin notices and restores to the new values next time.
+Each set of settings has three parts:
+
+| Setting | What it does |
+| --- | --- |
+| **Prevent dimming** | Stops the backlight dimming. |
+| **Prevent sleep** | Stops the Deck suspending. |
+| **Only apply when** | Always, only when plugged in, only with an external display, or only both. |
+
+The two can be used separately: prevent sleep during a long download but let the screen dim, or keep the screen lit for a recipe while still letting the Deck sleep eventually.
+
+Steam's timers go back to your own settings as soon as the app exits, and only the halves the plugin actually changed are ever written. If you change those settings in Steam while nothing is being kept awake, the plugin notices and restores to the new values next time.
 
 ## How it works
 
@@ -31,7 +42,12 @@ SteamOS drives dimming and auto-sleep from Steam client settings, not from a log
 | `system_idle_suspend_battery_sec` | `CMsgClientSettings` | 24003 (int32) | `SteamClient.Settings.SetSetting` |
 | `system_idle_suspend_ac_sec` | `CMsgClientSettings` | 24004 (int32) | `SteamClient.Settings.SetSetting` |
 
-Field numbers come from [SteamDatabase/Protobufs](https://github.com/SteamDatabase/Protobufs). The plugin watches `RegisterForAppLifetimeNotifications` for app starts and stops, zeroes those four timers while an enabled app is running, and puts your values back afterwards.
+Field numbers come from [SteamDatabase/Protobufs](https://github.com/SteamDatabase/Protobufs). The plugin watches `RegisterForAppLifetimeNotifications` for app starts and stops, zeroes the relevant timers while an enabled app is running, and puts your values back afterwards. Dimming and sleep are tracked independently, so turning one off never rewrites the other.
+
+The **only apply when** conditions come from two more sources:
+
+- *Plugged in* uses `RegisterForBatteryStateChanges` and its `eACState`. Reliable.
+- *External display* reads `CMsgSystemDisplayManagerState` for an enabled, non-internal display. Steam has no true dock-state API — `SteamClient.System.Dock` only reports dock firmware updates — so this is the closest available signal. It has the advantage of covering third-party hubs, not just the official dock. If the display state cannot be read, the condition simply never fires rather than firing at the wrong moment.
 
 Because Steam persists these settings, the plugin also records what it is holding. If the Deck loses power mid-override, your timers are restored the next time the plugin loads instead of being left off forever.
 
@@ -49,7 +65,7 @@ If you would rather this happened automatically for apps that ask the system not
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # protobuf encoding, against known-good bytes
+pnpm test        # codec, display parsing, conditions, config migration
 pnpm build       # -> dist/index.js
 pnpm watch       # rebuild on change
 ```
@@ -60,11 +76,15 @@ The VS Code tasks in `.vscode/tasks.json` cover the whole loop. Copy `.vscode/de
 
 ### Testing
 
-`pnpm test` covers the protobuf encoder, which is the part that can be checked away from the hardware. Everything else — whether Steam accepts the messages, whether the timers actually stop — can only be confirmed on a Deck in game mode. Worth checking by hand after a change:
+`pnpm test` covers the parts that can be checked away from the hardware: the protobuf codec against known-good bytes, the display-state parsing across every shape `GetState` has been seen to return, the power conditions, and config parsing including the v1 → v2 migration.
+
+Everything else — whether Steam accepts the messages, whether the timers actually stop — can only be confirmed on a Deck in game mode. Worth checking by hand after a change:
 
 1. Launch an enabled app, then look at Settings → Display and Settings → Power. Both timers should read as off.
 2. Exit it. They should return to whatever they were before.
-3. Restart decky-loader while an app is being kept awake. The timers should be restored on load, not left off.
+3. Turn off **Prevent sleep** but leave **Prevent dimming** on, and confirm only the dim timer changes.
+4. Set a profile to *only when plugged in*, then unplug. The timers should return to normal.
+5. Restart decky-loader while an app is being kept awake. The timers should be restored on load, not left off.
 
 ## License
 
