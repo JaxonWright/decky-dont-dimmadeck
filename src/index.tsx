@@ -2,7 +2,6 @@ import {
   ButtonItem,
   PanelSection,
   PanelSectionRow,
-  Navigation,
   staticClasses
 } from "@decky/ui";
 import {
