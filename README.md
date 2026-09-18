@@ -1,6 +1,6 @@
 <img src="assets/logo.png" alt="" width="120" align="right">
 
-# Don't Dimmadeck 🎩
+# Don't Dimmadeck
 
 A [Decky](https://github.com/SteamDeckHomebrew/decky-loader) plugin that stops the Steam Deck's screen dimming and the Deck going to sleep while your chosen apps are running.
 
