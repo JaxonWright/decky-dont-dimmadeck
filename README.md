@@ -17,12 +17,18 @@ The plugin is not in the Decky store yet, so Decky installs it straight from a U
 3. In that tab, paste this into **Install Plugin from URL** and press install:
 
 ```
+https://dontdimmadeck.jaxon.dev
+```
+
+Short enough to thumb in on the on-screen keyboard (**Steam + X**). It redirects to the newest release, so the same link works for updates.
+
+The release asset it points at also works directly, if you would rather not go through the redirect:
+
+```
 https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest/download/dont-dimmadeck.zip
 ```
 
-That link always resolves to the newest release, so the same one works for updates. Every release carries a `dont-dimmadeck.zip` under exactly that name for this reason, alongside the versioned copy.
-
-Typing that out on the on-screen keyboard (**Steam + X**) is the tedious part. If you would rather not, the zip and SSH routes below avoid it.
+Every release carries a `dont-dimmadeck.zip` under exactly that name so the link keeps working across versions, alongside the versioned copy.
 
 ### Other ways in
 
