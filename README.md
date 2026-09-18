@@ -4,13 +4,13 @@
 
 A [Decky](https://github.com/SteamDeckHomebrew/decky-loader) plugin that stops the Steam Deck's screen dimming and the Deck going to sleep while your chosen apps are running.
 
-This is useful for games like the Jackbox Party Packs, where everyone plays on their phones and nobody touches the Deck for twenty minutes at a time. It is equally useful for YouTube, Netflix, Plex, or anything else you watch rather than play.
+Built for the Jackbox Party Packs, where everyone plays on their phones and nobody touches the Deck for twenty minutes at a time. Just as good for YouTube, Netflix, Plex, or anything else you watch rather than play.
 
-Pick the apps you care about and the plugin handles the rest. Everything else keeps Steam's normal timers, so your battery life is untouched the rest of the time.
+Pick the apps you care about and the plugin handles the rest. Everything else keeps Steam's normal timers, so your battery life is untouched.
 
 ## Installing
 
-The plugin is not in the Decky store yet. Grab the zip from the [latest release](https://github.com/JaxonWright/decky-dont-dimmadeck/releases) — these are pre-releases, so tick **Include pre-releases** if you are browsing the releases page.
+The plugin is not in the Decky store yet. Grab the zip from the [latest release](https://github.com/JaxonWright/decky-dont-dimmadeck/releases). They are published as pre-releases, so tick **Include pre-releases** if you are browsing that page.
 
 On the Deck itself:
 
@@ -34,12 +34,12 @@ To uninstall, use the bin icon next to the plugin in the Decky menu.
 
 Open the Decky menu and pick **Don't Dimmadeck**.
 
-- **Keep awake now** — an immediate override, handy for a long download or an app you have not added yet. It applies your defaults straight away and ignores the power conditions.
-- **Current game** — toggle this on to keep the screen awake every time this app runs.
-- **Per-app settings** — pick any app you have added and give it its own settings, or leave it following the defaults. This is also where you remove an app.
-- **Defaults** — what every app uses unless it overrides them.
+- **Keep awake now** overrides everything straight away. Handy for a long download, or an app you have not got round to adding. It uses your defaults and ignores the power conditions.
+- **Current game** adds whatever is running right now, so it stays awake every time you launch it.
+- **Per-app settings** gives one app its own settings instead of the defaults. Also where you remove an app.
+- **Defaults** apply to every app that has no settings of its own.
 
-Each set of settings has three parts:
+Every set of settings has the same three parts:
 
 | Setting | What it does |
 | --- | --- |
@@ -47,13 +47,13 @@ Each set of settings has three parts:
 | **Prevent sleep** | Stops the Deck suspending. |
 | **Only apply when** | Always, only when plugged in, only with an external display, or only both. |
 
-The two can be used separately: prevent sleep during a long download but let the screen dim, or keep the screen lit for a recipe while still letting the Deck sleep eventually.
+Dimming and sleep are independent. Stop the Deck sleeping through a long download but let the screen dim anyway, or keep the screen lit for a recipe and still let it drop off eventually.
 
-Steam's timers go back to your own settings as soon as the app exits, and only the halves the plugin actually changed are ever written. If you change those settings in Steam while nothing is being kept awake, the plugin notices and restores to the new values next time.
+Steam's timers go back to your own settings as soon as the app exits, and the plugin only ever writes the ones it changed. Change those settings in Steam while nothing is being kept awake and it notices, restoring the new values next time.
 
 ## How it works
 
-SteamOS drives dimming and auto-sleep from Steam client settings, not from a logind idle inhibitor — `systemd-inhibit` has no effect on them. The two timers live in different protobuf messages, written through different setters, and `0` means "never":
+SteamOS drives dimming and auto-sleep from Steam client settings rather than from a logind idle inhibitor, so `systemd-inhibit` has no effect on them. The two timers live in different protobuf messages, written through different setters, and `0` means never.
 
 | Setting | Message | Field | Written via |
 | --- | --- | --- | --- |
@@ -62,25 +62,26 @@ SteamOS drives dimming and auto-sleep from Steam client settings, not from a log
 | `system_idle_suspend_battery_sec` | `CMsgClientSettings` | 24003 (int32) | `SteamClient.Settings.SetSetting` |
 | `system_idle_suspend_ac_sec` | `CMsgClientSettings` | 24004 (int32) | `SteamClient.Settings.SetSetting` |
 
-Field numbers come from [SteamDatabase/Protobufs](https://github.com/SteamDatabase/Protobufs). The plugin watches `RegisterForAppLifetimeNotifications` for app starts and stops, zeroes the relevant timers while an enabled app is running, and puts your values back afterwards. Dimming and sleep are tracked independently, so turning one off never rewrites the other.
+Field numbers come from [SteamDatabase/Protobufs](https://github.com/SteamDatabase/Protobufs). The plugin watches `RegisterForAppLifetimeNotifications` for app starts and stops, zeroes the relevant timers while an enabled app is running, and puts your values back afterwards. Dimming and sleep are tracked separately all the way through, so turning one off never rewrites the other.
 
-The **only apply when** conditions come from two more sources:
+The **only apply when** conditions come from two more sources.
 
-- *Plugged in* uses `RegisterForBatteryStateChanges` and its `eACState`. Reliable.
-- *External display* reads `CMsgSystemDisplayManagerState` for an enabled, non-internal display. Steam has no true dock-state API — `SteamClient.System.Dock` only reports dock firmware updates — so this is the closest available signal. It has the advantage of covering third-party hubs, not just the official dock. If the display state cannot be read, the condition simply never fires rather than firing at the wrong moment.
+*Plugged in* reads `eACState` from `RegisterForBatteryStateChanges`. That one is reliable.
 
-Because Steam persists these settings, the plugin also records what it is holding. If the Deck loses power mid-override, your timers are restored the next time the plugin loads instead of being left off forever.
+*External display* reads `CMsgSystemDisplayManagerState` looking for an enabled, non-internal display. Steam exposes no real dock state at all (`SteamClient.System.Dock` only reports dock firmware updates), so this is the closest signal going, and it has the happy side effect of covering third-party hubs rather than just the official dock. If the display state cannot be read, the condition never fires, which fails towards Steam's normal behaviour instead of pinning the screen on.
 
-If you would rather this happened automatically for apps that ask the system not to sleep — VLC, Chrome and mpv do — [DeckyInhibitScreenSaver](https://github.com/xfangfang/DeckyInhibitScreenSaver) takes that approach instead.
+Steam persists these settings, so the plugin records whatever it is holding. Lose power mid-override and your timers come back the next time the plugin loads, rather than staying off forever.
+
+Some apps ask the system not to sleep on their own, VLC and Chrome and mpv among them. If you would rather that happened automatically, [DeckyInhibitScreenSaver](https://github.com/xfangfang/DeckyInhibitScreenSaver) takes that approach instead.
 
 ## Development
 
 ### Prerequisites
 
-- Node.js 18+ and `pnpm` 9 (`sudo npm i -g pnpm@9`) — Decky's submission CI uses pnpm 9, so match it to keep the lockfile readable there.
+- Node.js 18+ and `pnpm` 9 (`sudo npm i -g pnpm@9`). Match the major version. Decky's submission CI runs pnpm 9 and has to be able to read the lockfile.
 - `zip`, for `pnpm package`.
 
-The [Decky CLI](https://github.com/SteamDeckHomebrew/cli) and Docker are *not* needed. They exist to compile plugin backends, and this plugin has none — `main.py` is plain Python that decky-loader runs itself.
+The [Decky CLI](https://github.com/SteamDeckHomebrew/cli) and Docker are not needed. They exist to compile plugin backends, and this plugin has none. `main.py` is plain Python that decky-loader runs itself.
 
 ### Building
 
@@ -93,7 +94,7 @@ pnpm package     # build, then -> out/dont-dimmadeck-v<version>.zip
 pnpm watch       # rebuild on change
 ```
 
-`pnpm package` produces exactly what the release workflow attaches: a zip holding one `dont-dimmadeck/` folder with `dist/`, `main.py`, `package.json`, `plugin.json`, `README.md` and `LICENSE`. decky-loader needs `plugin.json` exactly one level deep and finds the plugin by the `name` inside it, so the folder name is a slug rather than the display name.
+`pnpm package` produces exactly what the release workflow attaches. The zip holds one `dont-dimmadeck/` folder containing `dist/`, `main.py`, `package.json`, `plugin.json`, `README.md` and `LICENSE`. decky-loader wants `plugin.json` exactly one level deep and finds the plugin by the `name` inside it, so the folder gets a slug rather than the display name.
 
 ### Deploying to a Deck
 
@@ -105,11 +106,11 @@ scp out/dont-dimmadeck-v*.zip deck@steamdeck.local:/tmp/
 ssh deck@steamdeck.local 'unzip -o /tmp/dont-dimmadeck-v*.zip -d ~/homebrew/plugins/ && sudo systemctl restart plugin_loader'
 ```
 
-The VS Code tasks in `.vscode/tasks.json` do the same thing through the Decky CLI, if you prefer them. Copy `.vscode/defsettings.json` to `.vscode/settings.json` and fill in your Deck's IP, user and SSH details first.
+The VS Code tasks in `.vscode/tasks.json` do the same job through the Decky CLI if you prefer them. Copy `.vscode/defsettings.json` to `.vscode/settings.json` and fill in your Deck's IP, user and SSH details first.
 
 ### Cutting a release
 
-`.github/workflows/release.yml` builds the zip and publishes it as a GitHub **pre-release**.
+`.github/workflows/release.yml` builds the zip and publishes it as a GitHub pre-release.
 
 ```bash
 # 1. Bump the version. decky-loader reads it from package.json, and the
@@ -124,22 +125,22 @@ git push && git push --tags
 
 The workflow typechecks, tests, builds the zip, attaches it to the release with its sha256, and writes install instructions into the release notes.
 
-Running the workflow manually from the Actions tab (**Run workflow**) builds the same zip and uploads it as a workflow artifact without creating a release — useful for trying a change on a Deck before committing to a version.
+Running the workflow by hand from the Actions tab (**Run workflow**) builds the same zip and uploads it as a workflow artifact without creating a release. Useful for trying a change on a Deck before you commit to a version number.
 
 ### Testing
 
-`pnpm test` covers the parts that can be checked away from the hardware: the protobuf codec against known-good bytes, the display-state parsing across every shape `GetState` has been seen to return, the power conditions, and config parsing including the v1 → v2 migration.
+`pnpm test` covers what can be checked away from the hardware: the protobuf codec against known-good bytes, the display-state parsing across every shape `GetState` has been seen to return, the power conditions, and config parsing including the v1 to v2 migration.
 
-Everything else — whether Steam accepts the messages, whether the timers actually stop — can only be confirmed on a Deck in game mode. Worth checking by hand after a change:
+Everything else needs a Deck in game mode. Whether Steam accepts the messages, whether the timers actually stop, none of that can be proven here. Worth running through by hand after a change:
 
 1. Launch an enabled app, then look at Settings → Display and Settings → Power. Both timers should read as off.
-2. Exit it. They should return to whatever they were before.
-3. Turn off **Prevent sleep** but leave **Prevent dimming** on, and confirm only the dim timer changes.
+2. Exit it. They should go back to whatever they were before.
+3. Turn off **Prevent sleep** but leave **Prevent dimming** on, and confirm only the dim timer moves.
 4. Set a profile to *only when plugged in*, then unplug. The timers should return to normal.
 5. Restart decky-loader while an app is being kept awake. The timers should be restored on load, not left off.
 
 ## License
 
-This project is licensed with the [BSD 3-Clause](https://choosealicense.com/licenses/bsd-3-clause/) open-source license.
+[BSD 3-Clause](https://choosealicense.com/licenses/bsd-3-clause/). Use it, change it, ship it; keep the copyright notice and the disclaimer with any redistribution.
 
-This allows for the free use, modification, and distribution of software. It requires that any redistributions of the software must include a copy of the license, a disclaimer of liability, and the copyright notice. This license permits commercial use without the obligation to release the source code of derivative works, making it more permissive than copyleft licenses like the GPL.
+`LICENSE` also carries the original decky-plugin-template copyright, which its terms require and the Decky store checks for.
