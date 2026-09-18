@@ -2,6 +2,7 @@ import { defaultConfig, loadConfig, saveConfig } from "./config";
 import { DEFAULT_PROFILE, conditionMet } from "./profile";
 import { watchRunningApp } from "./steam/apps";
 import {
+  NEVER,
   NO_PARTS,
   STEAM_DEFAULTS,
   anyPart,
@@ -49,6 +50,7 @@ export class KeepAwakeController {
   private runningApp: RunningApp | null = null;
   private power: PowerState = { onAc: false, externalDisplay: false };
   private ready = false;
+  private disposed = false;
 
   /** Which halves we are currently holding at zero. */
   private overridden: IdleParts = { ...NO_PARTS };
@@ -67,6 +69,8 @@ export class KeepAwakeController {
   private pendingHalves = new Set(["dim", "suspend"]);
 
   async init(): Promise<void> {
+    if (this.disposed) return;
+
     this.observedReady = new Promise<void>((resolve) => {
       this.markObserved = resolve;
     });
@@ -111,6 +115,7 @@ export class KeepAwakeController {
     );
 
     this.config = await loadConfig();
+    if (this.abandonInit()) return;
 
     // A previous session was killed mid-override - Steam kept the zeroes, so
     // the halves it was holding have to be put back.
@@ -124,6 +129,7 @@ export class KeepAwakeController {
       // the baseline and lose whatever the user actually had configured, so
       // give it a moment - but not forever, in case it never arrives.
       await Promise.race([this.observedReady, sleep(OBSERVE_TIMEOUT_MS)]);
+      if (this.abandonInit()) return;
       if (this.pendingHalves.size > 0) {
         console.warn(
           "[Don't Dimmadeck] Steam did not report its idle timeouts; " +
@@ -137,14 +143,34 @@ export class KeepAwakeController {
     await this.reconcile();
   }
 
-  dispose(): void {
+  /**
+   * True when dispose landed mid-init. Initialisation must stop there rather
+   * than go on to set `ready` and reconcile, which would re-apply an override
+   * after the plugin had already been unloaded.
+   */
+  private abandonInit(): boolean {
+    if (!this.disposed) return false;
+    this.unsubscribeAll();
+    return true;
+  }
+
+  private unsubscribeAll(): void {
     for (const unsubscribe of this.unsubscribers) unsubscribe();
     this.unsubscribers = [];
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.ready = false;
+    this.unsubscribeAll();
     this.listeners.clear();
     if (anyPart(this.overridden)) {
-      // Best effort: decky does not wait on onDismount, so this is fire and
-      // forget. The persisted overridden flags cover us if it does not land.
-      void this.applyParts({ ...NO_PARTS });
+      // Queued rather than called directly, so an override still in flight
+      // cannot finish after the restore and leave the timers at zero. decky
+      // does not await onDismount, so this is best effort either way; the
+      // persisted flags are what actually guarantee recovery.
+      this.queue = this.queue.then(() => this.applyParts({ ...NO_PARTS }));
+      void this.queue;
     }
   }
 
@@ -226,7 +252,7 @@ export class KeepAwakeController {
 
   private reconcile(): Promise<void> {
     this.queue = this.queue.then(async () => {
-      if (!this.ready) return;
+      if (!this.ready || this.disposed) return;
       const wanted = this.wantedParts();
       if (partsEqual(wanted, this.overridden)) return;
       await this.applyParts(wanted);
@@ -236,40 +262,30 @@ export class KeepAwakeController {
   }
 
   /**
-   * Moves to a new set of overridden halves, snapshotting each one before
-   * taking it over and restoring it as it is handed back.
+   * Moves to a new set of overridden halves.
+   *
+   * Restores go first and unconditionally, because putting a value back is
+   * always safe. Takeovers wait for the config write that records them: that
+   * record is the only thing that can return the timers after an unclean
+   * shutdown, so disabling a timer we failed to write down would be the one
+   * way to strand the screen permanently undimmed.
+   *
+   * Over-recording is the safe direction. A half marked held that is not
+   * actually held only costs a redundant restore next load; a half held but
+   * not recorded never comes back.
    */
   private async applyParts(wanted: IdleParts): Promise<void> {
+    const held = { ...this.overridden };
     const baseline = { ...(this.config.baseline ?? STEAM_DEFAULTS) };
 
-    const takingOver: IdleParts = {
-      dim: wanted.dim && !this.overridden.dim,
-      suspend: wanted.suspend && !this.overridden.suspend,
-    };
     const handingBack: IdleParts = {
-      dim: !wanted.dim && this.overridden.dim,
-      suspend: !wanted.suspend && this.overridden.suspend,
+      dim: !wanted.dim && held.dim,
+      suspend: !wanted.suspend && held.suspend,
     };
-
-    // Snapshot the halves being taken over, so restore has somewhere to go
-    // back to. A half already held keeps the baseline it was given.
-    if (takingOver.dim) {
-      baseline.dimBattery = this.observed.dimBattery;
-      baseline.dimAc = this.observed.dimAc;
-    }
-    if (takingOver.suspend) {
-      baseline.suspendBattery = this.observed.suspendBattery;
-      baseline.suspendAc = this.observed.suspendAc;
-    }
-
-    this.overridden = { ...wanted };
-    this.config = { ...this.config, baseline, overridden: { ...wanted } };
-    await this.persist();
-
-    if (anyPart(takingOver)) {
-      const zeroes: IdleTimeouts = { dimBattery: 0, dimAc: 0, suspendBattery: 0, suspendAc: 0 };
-      await applyIdleTimeouts(zeroes, takingOver);
-    }
+    const takingOver: IdleParts = {
+      dim: wanted.dim && !held.dim,
+      suspend: wanted.suspend && !held.suspend,
+    };
 
     if (anyPart(handingBack)) {
       // Restoring a zero would defeat the point; if that is genuinely what the
@@ -280,19 +296,65 @@ export class KeepAwakeController {
         suspendBattery: baseline.suspendBattery || STEAM_DEFAULTS.suspendBattery,
         suspendAc: baseline.suspendAc || STEAM_DEFAULTS.suspendAc,
       };
-      if (handingBack.dim) {
+      const restored = await applyIdleTimeouts(target, handingBack);
+      // Only a half that actually landed stops being owed back.
+      if (restored.dim) {
         this.observed.dimBattery = target.dimBattery;
         this.observed.dimAc = target.dimAc;
+        held.dim = false;
       }
-      if (handingBack.suspend) {
+      if (restored.suspend) {
         this.observed.suspendBattery = target.suspendBattery;
         this.observed.suspendAc = target.suspendAc;
+        held.suspend = false;
       }
-      await applyIdleTimeouts(target, handingBack);
+      this.overridden = { ...held };
+      this.config = { ...this.config, overridden: { ...held } };
+      await this.persist();
+    }
+
+    if (!anyPart(takingOver)) return;
+
+    if (takingOver.dim) {
+      baseline.dimBattery = this.observed.dimBattery;
+      baseline.dimAc = this.observed.dimAc;
+    }
+    if (takingOver.suspend) {
+      baseline.suspendBattery = this.observed.suspendBattery;
+      baseline.suspendAc = this.observed.suspendAc;
+    }
+
+    const intended: IdleParts = {
+      dim: held.dim || takingOver.dim,
+      suspend: held.suspend || takingOver.suspend,
+    };
+    const previousConfig = this.config;
+    this.config = { ...this.config, baseline, overridden: { ...intended } };
+
+    if (!(await this.persist())) {
+      console.error(
+        "[Don't Dimmadeck] leaving the idle timers alone: the config write failed, " +
+          "so there would be nothing to restore them from",
+      );
+      this.config = previousConfig;
+      this.overridden = { ...held };
+      return;
+    }
+
+    const applied = await applyIdleTimeouts(NEVER, takingOver);
+    held.dim = held.dim || applied.dim;
+    held.suspend = held.suspend || applied.suspend;
+    this.overridden = { ...held };
+
+    if (!partsEqual(held, intended)) {
+      // A setter failed, so narrow the record to what is really held.
+      this.config = { ...this.config, overridden: { ...held } };
+      await this.persist();
     }
   }
 
-  private persist(): Promise<void> {
+  /** Returns whether the write landed. */
+  private persist(): Promise<boolean> {
     return saveConfig(this.config);
   }
 

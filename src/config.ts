@@ -20,10 +20,21 @@ export async function loadConfig(): Promise<Config> {
   }
 }
 
-export async function saveConfig(config: Config): Promise<void> {
+/**
+ * Returns whether the write landed. Callers must check: this file records the
+ * timeouts we owe the user, so overriding them after a failed write would
+ * leave nothing to restore from.
+ */
+export async function saveConfig(config: Config): Promise<boolean> {
   try {
-    await setConfig(serializeConfig(config));
+    const written = await setConfig(serializeConfig(config));
+    if (written === false) {
+      console.error("[Don't Dimmadeck] the backend rejected the config write");
+      return false;
+    }
+    return true;
   } catch (error) {
     console.error("[Don't Dimmadeck] failed to save config", error);
+    return false;
   }
 }

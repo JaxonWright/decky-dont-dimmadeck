@@ -156,12 +156,18 @@ export function anyPart(parts: IdleParts): boolean {
  * dimming left alone must not have their dim setting rewritten underneath
  * them. The two halves are also independent for failure - if one setter is
  * missing from this Steam build the other still applies.
+ *
+ * Returns which halves actually landed. Callers must not record a half as
+ * restored, or as overridden, unless it is reported here: a setter that threw
+ * leaves Steam holding the old value, and losing track of that is what strands
+ * the timers at zero with nothing to recover from.
  */
 export async function applyIdleTimeouts(
   timeouts: IdleTimeouts,
   parts: IdleParts = BOTH_PARTS,
-): Promise<void> {
+): Promise<IdleParts> {
   const client = steam();
+  const applied: IdleParts = { dim: false, suspend: false };
 
   const system = client.System;
   if (!parts.dim) {
@@ -169,6 +175,7 @@ export async function applyIdleTimeouts(
   } else if (system?.UpdateSettings) {
     try {
       await system.UpdateSettings(encodeDimSettings(timeouts));
+      applied.dim = true;
     } catch (error) {
       console.error("[Don't Dimmadeck] failed to set dim timeouts", error);
     }
@@ -182,10 +189,13 @@ export async function applyIdleTimeouts(
   } else if (settings?.SetSetting) {
     try {
       await settings.SetSetting(encodeSuspendSettings(timeouts));
+      applied.suspend = true;
     } catch (error) {
       console.error("[Don't Dimmadeck] failed to set suspend timeouts", error);
     }
   } else {
     console.warn("[Don't Dimmadeck] SteamClient.Settings.SetSetting is unavailable");
   }
+
+  return applied;
 }

@@ -1,3 +1,5 @@
+import { Router } from "@decky/ui";
+
 import { appName, steam } from "./client";
 
 export interface RunningApp {
@@ -16,6 +18,16 @@ export function watchRunningApp(onChange: (app: RunningApp | null) => void): () 
   // Insertion-ordered, so the last entry is the most recently started app.
   const running = new Set<number>();
   let current: number | null = null;
+
+  // RegisterForAppLifetimeNotifications only reports transitions, so an app
+  // already running when the plugin loads would otherwise go unnoticed until
+  // it exits - which is exactly the case after decky restarts mid-game.
+  try {
+    const startup = Router.MainRunningApp;
+    if (startup?.appid !== undefined) running.add(Number(startup.appid));
+  } catch (error) {
+    console.error("[Don't Dimmadeck] failed to read the running app at startup", error);
+  }
 
   const publish = () => {
     let latest: number | null = null;
@@ -37,6 +49,9 @@ export function watchRunningApp(onChange: (app: RunningApp | null) => void): () 
       publish();
     },
   );
+
+  // Report the seeded app before returning, so callers see it immediately.
+  publish();
 
   if (!subscription) {
     console.warn(

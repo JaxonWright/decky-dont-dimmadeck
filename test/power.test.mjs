@@ -48,6 +48,20 @@ test("accepts an already-deserialised object or JsPb message", () => {
   assert.equal(externalDisplayFromState({ displays: [displays[0]] }), false);
 });
 
+test("needs an explicit enabled flag, on either shape", () => {
+  // An absent flag must not count as enabled: the condition failing to fire
+  // just falls back to Steam's timers, whereas a false positive pins the
+  // screen on.
+  assert.equal(externalDisplayFromState({ displays: [{ is_internal: false }] }), false);
+  assert.equal(
+    externalDisplayFromState({ displays: [{ is_enabled: false, is_internal: false }] }),
+    false,
+  );
+  // Same for the buffer path, where is_enabled is simply not written.
+  const noFlag = encodeBytesField(1, [...encodeVarintField(6, 0)]);
+  assert.equal(externalDisplayFromState(Uint8Array.from(noFlag)), false);
+});
+
 test("reports null rather than guessing on an unrecognised shape", () => {
   assert.equal(externalDisplayFromState(null), null);
   assert.equal(externalDisplayFromState(undefined), null);

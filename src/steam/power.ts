@@ -41,7 +41,10 @@ export function externalDisplayFromState(state: unknown): boolean | null {
         const entry = display as Record<string, unknown>;
         const internal = entry.is_internal ?? entry.bIsInternal;
         const enabled = entry.is_enabled ?? entry.bIsEnabled;
-        return internal === false && enabled !== false;
+        // Explicit true only, matching the buffer path. An absent flag is
+        // treated as not-enabled so an unreadable field cannot pin the
+        // screen on.
+        return internal === false && enabled === true;
       });
     }
     return null;
@@ -120,11 +123,14 @@ export function watchPowerState(onChange: (state: PowerState) => void): () => vo
       const external = externalDisplayFromState(await displayManager.GetState());
       if (external === null) {
         console.warn("[Don't Dimmadeck] could not read display state in a recognised shape");
-        return;
       }
-      publish({ externalDisplay: external });
+      // Fail closed. Holding a stale true would keep the screen awake on a
+      // condition we can no longer confirm; false just falls back to Steam's
+      // own timers.
+      publish({ externalDisplay: external === true });
     } catch (error) {
       console.error("[Don't Dimmadeck] failed to read display state", error);
+      publish({ externalDisplay: false });
     }
   };
 

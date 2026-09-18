@@ -101,9 +101,11 @@ pnpm watch       # rebuild on change
 Fastest loop while developing:
 
 ```bash
-pnpm package
-scp out/dont-dimmadeck-v*.zip deck@steamdeck.local:/tmp/
-ssh deck@steamdeck.local 'unzip -o /tmp/dont-dimmadeck-v*.zip -d ~/homebrew/plugins/ && sudo systemctl restart plugin_loader'
+# pnpm package prints the archive path, so deploy that exact file.
+# out/ accumulates old versions, and a glob would upload all of them.
+zip=$(pnpm --silent package | tail -1)
+scp "$zip" deck@steamdeck.local:/tmp/
+ssh deck@steamdeck.local "unzip -o /tmp/$(basename "$zip") -d ~/homebrew/plugins/ && sudo systemctl restart plugin_loader"
 ```
 
 The VS Code tasks in `.vscode/tasks.json` do the same job through the Decky CLI if you prefer them. Copy `.vscode/defsettings.json` to `.vscode/settings.json` and fill in your Deck's IP, user and SSH details first.
