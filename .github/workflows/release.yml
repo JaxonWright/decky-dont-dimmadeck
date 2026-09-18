@@ -92,6 +92,12 @@ jobs:
           \`\`\`
 
           Then restart Decky (Decky menu → gear → **Reload**) or reboot.
+
+          ## If something goes wrong
+
+          The plugin records the timers it changes and restores them when an app
+          exits, including after an unclean shutdown. Failing that, Settings →
+          Display and Settings → Power let you set them back by hand.
           EOF
 
           if [ "$on_master" = false ]; then
@@ -103,10 +109,6 @@ jobs:
           master. The tests cover the protobuf encoding, display-state parsing,
           power conditions and config migration, but anything past that needs a
           Deck to confirm.
-
-          The plugin records the timers it changes and restores them when an app
-          exits, including after an unclean shutdown. If something does go wrong,
-          Settings → Display and Settings → Power let you set them back by hand.
           EOF
           fi
 

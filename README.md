@@ -10,7 +10,7 @@ Pick the apps you care about and the plugin handles the rest. Everything else ke
 
 ## Installing
 
-The plugin is not in the Decky store yet. Grab the zip from the [latest release](https://github.com/JaxonWright/decky-dont-dimmadeck/releases). They are published as pre-releases, so tick **Include pre-releases** if you are browsing that page.
+The plugin is not in the Decky store yet. Grab the zip from the [latest release](https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest).
 
 On the Deck itself:
 
