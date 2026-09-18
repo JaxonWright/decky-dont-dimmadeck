@@ -112,7 +112,7 @@ The VS Code tasks in `.vscode/tasks.json` do the same job through the Decky CLI 
 
 ### Cutting a release
 
-`.github/workflows/release.yml` builds the zip and publishes it as a GitHub pre-release.
+`.github/workflows/release.yml` builds the zip and publishes it as a GitHub release. A tag whose commit has landed on master becomes a full release; a tag cut from a branch stays a pre-release, and its notes say so.
 
 ```bash
 # 1. Bump the version. decky-loader reads it from package.json, and the
