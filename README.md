@@ -10,43 +10,43 @@ Pick the apps you care about and the plugin handles the rest. Everything else ke
 
 ## Installing
 
-The plugin is not in the Decky store yet, so Decky installs it straight from a URL. Nothing to download, no USB stick, no SSH.
+The plugin is **not** currently in the official Decky Store. This README will be updated if it ever gets put in that.
+
+### Via URL
+
+The plugin is not in the Decky store, so Decky installs it straight from a URL:
 
 1. In game mode, open the Decky menu (the plug icon), then the gear icon.
 2. Turn on **Developer mode**. A **Developer** tab appears in the same settings page.
-3. In that tab, paste this into **Install Plugin from URL** and press install:
+3. In that tab, enter (**Steam** + **X**) this into **Install Plugin from URL** and press install:
 
 ```
 https://dontdimmadeck.jaxon.dev
 ```
 
-Short enough to thumb in on the on-screen keyboard (**Steam + X**). It redirects to the newest release, so the same link works for updates.
+The URL redirects to the newest release, so the same link works for updates.
 
-The release asset it points at also works directly, if you would rather not go through the redirect:
-
-```
-https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest/download/dont-dimmadeck.zip
-```
-
-Every release carries a `dont-dimmadeck.zip` under exactly that name so the link keeps working across versions, alongside the versioned copy.
-
-### Other ways in
+### Via Downloaded ZIP
 
 Download `dont-dimmadeck-vX.Y.Z.zip` from the [latest release](https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest) onto the Deck or a USB stick, then use **Install Plugin from Zip** in the same Developer tab.
+
+### Via SSH
 
 Or over SSH from another machine, with [SSH enabled on the Deck](https://wiki.deckbrew.xyz/en/user-guide/ssh-setup):
 
 ```bash
-curl -LO https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest/download/dont-dimmadeck.zip
+curl -LO https://dontdimmadeck.jaxon.dev
 scp dont-dimmadeck.zip deck@steamdeck.local:/tmp/
 ssh deck@steamdeck.local 'unzip -o /tmp/dont-dimmadeck.zip -d ~/homebrew/plugins/'
 ```
 
 Then reload Decky (Decky menu → gear → **Reload**) or reboot.
 
+## Uninstalling
+
 To uninstall, use the bin icon next to the plugin in the Decky menu.
 
-## Using it
+## Usage
 
 Open the Decky menu and pick **Don't Dimmadeck**.
 
@@ -67,7 +67,7 @@ Dimming and sleep are independent. Stop the Deck sleeping through a long downloa
 
 Steam's timers go back to your own settings as soon as the app exits, and the plugin only ever writes the ones it changed. Change those settings in Steam while nothing is being kept awake and it notices, restoring the new values next time.
 
-## How it works
+## Under The Hood
 
 SteamOS drives dimming and auto-sleep from Steam client settings rather than from a logind idle inhibitor, so `systemd-inhibit` has no effect on them. The two timers live in different protobuf messages, written through different setters, and `0` means never.
 
