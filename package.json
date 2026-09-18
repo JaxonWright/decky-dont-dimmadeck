@@ -1,6 +1,6 @@
 {
   "name": "dont-dimmadeck",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Keep the Steam Deck screen awake on a per-app basis",
   "type": "module",
   "scripts": {
