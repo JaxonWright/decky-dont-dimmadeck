@@ -1,11 +1,11 @@
 {
   "name": "Don't Dimmadeck",
   "author": "Jaxon Wright",
-  "flags": ["debug", "_root"],
+  "flags": [],
   "api_version": 1,
   "publish": {
-    "tags": ["screen-timeout", "screen-dim", "dim", "timeout"],
-    "description": "Disable screen dimming and timeout on a per-app basis.",
-    "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/PluginLoader"
+    "tags": ["screen-timeout", "screen-dim", "power", "utility"],
+    "description": "Stop the screen dimming and the Deck going to sleep while your chosen apps are running.",
+    "image": "https://raw.githubusercontent.com/JaxonWright/decky-dont-dimmadeck/master/assets/logo.png"
   }
 }

@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Build the zip without cutting a release, to try a change on a Deck first.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the job can tell whether the tag is on master.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(node -p "require('./package.json').version")"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $pkg_version." >&2
+            echo "decky-loader reads the version from package.json, so they have to agree." >&2
+            exit 1
+          fi
+
+      - name: Build the plugin zip
+        id: package
+        run: |
+          zip_path="$(pnpm --silent package | tail -1)"
+          # A second copy under a fixed name, so
+          # /releases/latest/download/dont-dimmadeck.zip keeps working across
+          # versions. That URL is what the README tells people to paste into
+          # Decky's "Install Plugin from URL", and GitHub matches the asset by
+          # name, so a versioned name alone would break on every release.
+          stable_path="$(dirname "$zip_path")/dont-dimmadeck.zip"
+          cp "$zip_path" "$stable_path"
+          echo "path=$zip_path" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$zip_path")" >> "$GITHUB_OUTPUT"
+          echo "stable=$stable_path" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$zip_path" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the zip as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: ${{ steps.package.outputs.path }}
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP_PATH: ${{ steps.package.outputs.path }}
+          ZIP_NAME: ${{ steps.package.outputs.name }}
+          ZIP_SHA: ${{ steps.package.outputs.sha256 }}
+          ZIP_STABLE: ${{ steps.package.outputs.stable }}
+        run: |
+          # A tag that has landed on master is a real release. A tag cut from a
+          # branch is still under review, so it stays a pre-release. The check
+          # sits inside `if` so a missing origin/master fails safe to
+          # pre-release rather than aborting the job under `set -e`.
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            on_master=true
+          else
+            on_master=false
+          fi
+          echo "tagged commit is on master: $on_master"
+
+          cat > notes.md <<EOF
+          ## Installing on a Steam Deck
+
+          In game mode, open the Decky menu, then the gear icon, then turn on
+          **Developer mode**. In the **Developer** tab that appears, paste this
+          into **Install Plugin from URL**:
+
+          \`\`\`
+          https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest/download/dont-dimmadeck.zip
+          \`\`\`
+
+          That link always resolves to the newest release, so it works for
+          updates too. Otherwise download \`$ZIP_NAME\` below and use
+          **Install Plugin from Zip**.
+
+          Or, over SSH from another machine:
+
+          \`\`\`bash
+          scp $ZIP_NAME deck@steamdeck.local:/tmp/
+          ssh deck@steamdeck.local 'unzip -o /tmp/$ZIP_NAME -d ~/homebrew/plugins/'
+          \`\`\`
+
+          Then restart Decky (Decky menu → gear → **Reload**) or reboot.
+
+          ## If something goes wrong
+
+          The plugin records the timers it changes and restores them when an app
+          exits, including after an unclean shutdown. Failing that, Settings →
+          Display and Settings → Power let you set them back by hand.
+          EOF
+
+          if [ "$on_master" = false ]; then
+          cat >> notes.md <<EOF
+
+          ## Heads up
+
+          This is a pre-release, cut from a branch before it has been merged to
+          master. The tests cover the protobuf encoding, display-state parsing,
+          power conditions and config migration, but anything past that needs a
+          Deck to confirm.
+          EOF
+          fi
+
+          printf '\n`sha256: %s`\n' "$ZIP_SHA" >> notes.md
+
+          args=(--title "$GITHUB_REF_NAME" --notes-file notes.md --generate-notes)
+          if [ "$on_master" = false ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" "$ZIP_PATH" "$ZIP_STABLE" "${args[@]}"
