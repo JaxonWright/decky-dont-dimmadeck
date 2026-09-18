@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <!-- Text is set in Google Sans Display (Regular + Medium). That font is
+       Google's proprietary brand typeface and is deliberately not bundled here,
+       so re-rendering this SVG needs it installed locally. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
-      <stop offset="0" stop-color="#1F2635"/><stop offset="1" stop-color="#0C1017"/>
-    </linearGradient>
     <radialGradient id="glow" cx="21%" cy="52%" r="46%">
       <stop offset="0" stop-color="#FFB93D" stop-opacity="0.34"/>
       <stop offset="0.55" stop-color="#FF9E2C" stop-opacity="0.10"/>
@@ -23,8 +23,8 @@
     <clipPath id="crownClip"><path d="M67 20 L71 87 A 29 11 0 0 0 129 87 L133 20 A 33 10 0 0 1 67 20 Z"/></clipPath>
   </defs>
 
-  <rect width="1280" height="640" fill="url(#bg)"/>
-  <rect width="1280" height="640" fill="url(#glow)"/>
+  <rect width="1280" height="640" fill="#000000"/>
+  
 
   <g transform="translate(92 152) scale(1.75)">
     <g id="mark">
@@ -53,11 +53,11 @@
     </g>
   </g>
 
-  <g font-family="Noto Sans" text-anchor="start">
-    <text x="496" y="226" font-size="26" font-weight="700" letter-spacing="4.5" fill="#F9A62B">DECKY PLUGIN</text>
-    <text x="496" y="320" font-size="76" font-weight="800" fill="#F7F4EC">Don’t Dimmadeck</text>
+  <g font-family="Google Sans Display" text-anchor="start">
+    <text x="496" y="226" font-family="Google Sans Display Medium" font-size="26" letter-spacing="4.5" fill="#F9A62B">DECKY PLUGIN</text>
+    <text x="496" y="320" font-family="Google Sans Display Medium" font-size="76" fill="#F7F4EC">Don’t Dimmadeck</text>
     <rect x="496" y="350" width="86" height="6" rx="3" fill="#F9A62B"/>
-    <text x="496" y="412" font-size="33" font-weight="400" fill="#A7B2C4">Keeps the Steam Deck screen awake</text>
-    <text x="496" y="456" font-size="33" font-weight="400" fill="#A7B2C4">for the apps you choose.</text>
+    <text x="496" y="412" font-size="33" fill="#AEB7C6">Keep your Steam Deck screen awake</text>
+    <text x="496" y="456" font-size="33" fill="#AEB7C6">for apps you choose</text>
   </g>
 </svg>
