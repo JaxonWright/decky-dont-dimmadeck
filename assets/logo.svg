@@ -1,13 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1D2433"/><stop offset="1" stop-color="#0E1219"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="50%" cy="63%" r="54%">
-      <stop offset="0" stop-color="#FFB93D" stop-opacity="0.55"/>
-      <stop offset="0.55" stop-color="#FF9E2C" stop-opacity="0.16"/>
-      <stop offset="1" stop-color="#FF9E2C" stop-opacity="0"/>
-    </radialGradient>
     <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFE08A"/><stop offset="0.5" stop-color="#FFC24D"/><stop offset="1" stop-color="#F59A1E"/>
     </linearGradient>
@@ -23,8 +15,7 @@
     <clipPath id="crownClip"><path d="M67 20 L71 87 A 29 11 0 0 0 129 87 L133 20 A 33 10 0 0 1 67 20 Z"/></clipPath>
   </defs>
 
-  <rect width="200" height="200" rx="44" fill="url(#bg)"/>
-  <rect width="200" height="200" rx="44" fill="url(#glow)"/>
+  <rect width="200" height="200" rx="44" fill="#000000"/>
 
   <g>
     <path d="M146.60 121.87 L163.89 124.23 L163.89 131.77 L146.60 134.13 Z" fill="url(#ray)" stroke-linejoin="round"/>
