@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1D2433"/><stop offset="1" stop-color="#0E1219"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="63%" r="54%">
+      <stop offset="0" stop-color="#FFB93D" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="#FF9E2C" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#FF9E2C" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE08A"/><stop offset="0.5" stop-color="#FFC24D"/><stop offset="1" stop-color="#F59A1E"/>
+    </linearGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD470"/><stop offset="1" stop-color="#F9A62B"/>
+    </linearGradient>
+    <linearGradient id="crown" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#D8CBB0"/><stop offset="0.4" stop-color="#F5EEDC"/><stop offset="1" stop-color="#C4B695"/>
+    </linearGradient>
+    <linearGradient id="brimg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#D3C6AA"/><stop offset="0.45" stop-color="#F2EAD6"/><stop offset="1" stop-color="#BFB08E"/>
+    </linearGradient>
+    <clipPath id="crownClip"><path d="M67 20 L71 87 A 29 11 0 0 0 129 87 L133 20 A 33 10 0 0 1 67 20 Z"/></clipPath>
+  </defs>
+
+  <rect width="200" height="200" rx="44" fill="url(#bg)"/>
+  <rect width="200" height="200" rx="44" fill="url(#glow)"/>
+
+  <g>
+    <path d="M146.60 121.87 L163.89 124.23 L163.89 131.77 L146.60 134.13 Z" fill="url(#ray)" stroke-linejoin="round"/>
+    <path d="M143.42 145.99 L157.21 156.68 L153.45 163.21 L137.29 156.61 Z" fill="url(#ray)" stroke-linejoin="round"/>
+    <path d="M128.61 165.29 L135.21 181.45 L128.68 185.21 L117.99 171.42 Z" fill="url(#ray)" stroke-linejoin="round"/>
+    <path d="M106.13 174.60 L103.77 191.89 L96.23 191.89 L93.87 174.60 Z" fill="url(#ray)" stroke-linejoin="round"/>
+    <path d="M82.01 171.42 L71.32 185.21 L64.79 181.45 L71.39 165.29 Z" fill="url(#ray)" stroke-linejoin="round"/>
+    <path d="M62.71 156.61 L46.55 163.21 L42.79 156.68 L56.58 145.99 Z" fill="url(#ray)" stroke-linejoin="round"/>
+    <path d="M53.40 134.13 L36.11 131.77 L36.11 124.23 L53.40 121.87 Z" fill="url(#ray)" stroke-linejoin="round"/>
+  </g>
+
+  <circle cx="100" cy="128" r="38" fill="url(#sun)"/>
+  <circle cx="100" cy="128" r="38" fill="none" stroke="#FFE9B0" stroke-opacity="0.45" stroke-width="2"/>
+
+  <ellipse cx="100" cy="101" rx="54" ry="12" fill="#6B3300" opacity="0.42" transform="rotate(-7 100 90)"/>
+  <ellipse cx="100" cy="96" rx="56" ry="12" fill="#8A4A05" opacity="0.30" transform="rotate(-7 100 90)"/>
+
+  <g transform="rotate(-7 100 90)">
+    <path d="M67 20 L71 87 A 29 11 0 0 0 129 87 L133 20 A 33 10 0 0 1 67 20 Z" fill="url(#crown)"/>
+    <g clip-path="url(#crownClip)">
+      <rect x="50" y="64" width="100" height="15" fill="#2B3140"/>
+      <rect x="50" y="64" width="100" height="4" fill="#49505F" opacity="0.6"/>
+    </g>
+    <ellipse cx="100" cy="20" rx="33" ry="10" fill="#FBF6E8"/>
+    <ellipse cx="100" cy="20" rx="33" ry="10" fill="none" stroke="#8C7F63" stroke-opacity="0.5" stroke-width="1.5"/>
+    <ellipse cx="100" cy="90" rx="58" ry="12.5" fill="url(#brimg)"/>
+    <ellipse cx="100" cy="90" rx="58" ry="12.5" fill="none" stroke="#8C7F63" stroke-opacity="0.75" stroke-width="2"/>
+  </g>
+</svg>
