@@ -8,7 +8,25 @@ Pick the apps you care about and the plugin handles the rest. Everything else ke
 
 ## Installing
 
-The plugin is not in the Decky store yet. To install it now, build it (see below) and either use the resulting zip with Decky's "Install from URL/file", or copy the built files to `~/homebrew/plugins/` on your Deck.
+The plugin is not in the Decky store yet. Grab the zip from the [latest release](https://github.com/JaxonWright/decky-dont-dimmadeck/releases) — these are pre-releases, so tick **Include pre-releases** if you are browsing the releases page.
+
+On the Deck itself:
+
+1. Download `dont-dimmadeck-vX.Y.Z.zip`, onto the Deck or onto a USB stick.
+2. In game mode, open the Decky menu (the plug icon), then the gear icon, then **Developer mode**.
+3. Turn **Developer mode** on. A **Developer** tab appears in the same settings page.
+4. Under **Install Plugin from Zip**, pick the file.
+
+Or over SSH from another machine, with [SSH enabled on the Deck](https://wiki.deckbrew.xyz/en/user-guide/ssh-setup):
+
+```bash
+scp dont-dimmadeck-v1.0.0.zip deck@steamdeck.local:/tmp/
+ssh deck@steamdeck.local 'unzip -o /tmp/dont-dimmadeck-v1.0.0.zip -d ~/homebrew/plugins/'
+```
+
+Then reload Decky (Decky menu → gear → **Reload**) or reboot.
+
+To uninstall, use the bin icon next to the plugin in the Decky menu.
 
 ## Using it
 
@@ -58,7 +76,9 @@ If you would rather this happened automatically for apps that ask the system not
 ### Prerequisites
 
 - Node.js 18+ and `pnpm` 9 (`sudo npm i -g pnpm@9`) — Decky's submission CI uses pnpm 9, so match it to keep the lockfile readable there.
-- The [Decky CLI](https://github.com/SteamDeckHomebrew/cli) to package a zip. `.vscode/setup.sh` will fetch it into `cli/`.
+- `zip`, for `pnpm package`.
+
+The [Decky CLI](https://github.com/SteamDeckHomebrew/cli) and Docker are *not* needed. They exist to compile plugin backends, and this plugin has none — `main.py` is plain Python that decky-loader runs itself.
 
 ### Building
 
@@ -67,12 +87,42 @@ pnpm install
 pnpm typecheck   # tsc --noEmit
 pnpm test        # codec, display parsing, conditions, config migration
 pnpm build       # -> dist/index.js
+pnpm package     # build, then -> out/dont-dimmadeck-v<version>.zip
 pnpm watch       # rebuild on change
 ```
 
+`pnpm package` produces exactly what the release workflow attaches: a zip holding one `dont-dimmadeck/` folder with `dist/`, `main.py`, `package.json`, `plugin.json`, `README.md` and `LICENSE`. decky-loader needs `plugin.json` exactly one level deep and finds the plugin by the `name` inside it, so the folder name is a slug rather than the display name.
+
 ### Deploying to a Deck
 
-The VS Code tasks in `.vscode/tasks.json` cover the whole loop. Copy `.vscode/defsettings.json` to `.vscode/settings.json`, fill in your Deck's IP, user and SSH details, then run the **builddeploy** task. `cli/decky plugin build .` produces the zip by hand if you would rather not use the tasks.
+Fastest loop while developing:
+
+```bash
+pnpm package
+scp out/dont-dimmadeck-v*.zip deck@steamdeck.local:/tmp/
+ssh deck@steamdeck.local 'unzip -o /tmp/dont-dimmadeck-v*.zip -d ~/homebrew/plugins/ && sudo systemctl restart plugin_loader'
+```
+
+The VS Code tasks in `.vscode/tasks.json` do the same thing through the Decky CLI, if you prefer them. Copy `.vscode/defsettings.json` to `.vscode/settings.json` and fill in your Deck's IP, user and SSH details first.
+
+### Cutting a release
+
+`.github/workflows/release.yml` builds the zip and publishes it as a GitHub **pre-release**.
+
+```bash
+# 1. Bump the version. decky-loader reads it from package.json, and the
+#    workflow fails the build if the tag and package.json disagree.
+npm version 1.0.1 --no-git-tag-version
+git commit -am "chore: 1.0.1"
+
+# 2. Tag and push. The tag is what triggers the release.
+git tag v1.0.1
+git push && git push --tags
+```
+
+The workflow typechecks, tests, builds the zip, attaches it to the release with its sha256, and writes install instructions into the release notes.
+
+Running the workflow manually from the Actions tab (**Run workflow**) builds the same zip and uploads it as a workflow artifact without creating a release — useful for trying a change on a Deck before committing to a version.
 
 ### Testing
 

@@ -1,10 +1,11 @@
 {
   "name": "dont-dimmadeck",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Keep the Steam Deck screen awake on a per-app basis",
   "type": "module",
   "scripts": {
     "build": "rollup -c",
+    "package": "rollup -c && ./scripts/package.sh",
     "watch": "rollup -c -w",
     "typecheck": "tsc --noEmit",
     "test": "node --test --import ./test/ts-resolve.mjs \"test/**/*.test.mjs\""

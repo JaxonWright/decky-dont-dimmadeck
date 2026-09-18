@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Build the zip without cutting a release, to try a change on a Deck first.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(node -p "require('./package.json').version")"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $pkg_version." >&2
+            echo "decky-loader reads the version from package.json, so they have to agree." >&2
+            exit 1
+          fi
+
+      - name: Build the plugin zip
+        id: package
+        run: |
+          zip_path="$(pnpm --silent package | tail -1)"
+          echo "path=$zip_path" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$zip_path")" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$zip_path" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the zip as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: ${{ steps.package.outputs.path }}
+
+      - name: Publish the pre-release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP_PATH: ${{ steps.package.outputs.path }}
+          ZIP_NAME: ${{ steps.package.outputs.name }}
+          ZIP_SHA: ${{ steps.package.outputs.sha256 }}
+        run: |
+          cat > notes.md <<EOF
+          ## Installing on a Steam Deck
+
+          1. Download \`$ZIP_NAME\` below, onto the Deck itself or onto a USB stick.
+          2. In game mode, open the Decky menu, then the gear icon, then **Developer mode**.
+          3. Turn on **Developer mode**, then open the **Developer** tab that appears.
+          4. Under **Install Plugin from Zip**, pick the file.
+
+          Or, over SSH from another machine:
+
+          \`\`\`bash
+          scp $ZIP_NAME deck@steamdeck.local:/tmp/
+          ssh deck@steamdeck.local 'unzip -o /tmp/$ZIP_NAME -d ~/homebrew/plugins/'
+          \`\`\`
+
+          Then restart Decky (Decky menu → gear → **Reload**) or reboot.
+
+          ## Heads up
+
+          This is a pre-release. It has not been verified on Steam Deck hardware:
+          the tests cover the protobuf encoding, display-state parsing, power
+          conditions and config migration, but whether Steam accepts the settings
+          messages can only be confirmed on a Deck.
+
+          The plugin records the timers it changes and restores them when an app
+          exits, including after an unclean shutdown. If something does go wrong,
+          Settings → Display and Settings → Power let you set them back by hand.
+
+          \`sha256: $ZIP_SHA\`
+          EOF
+
+          gh release create "$GITHUB_REF_NAME" "$ZIP_PATH" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --prerelease \
+            --generate-notes
