@@ -10,20 +10,30 @@ Pick the apps you care about and the plugin handles the rest. Everything else ke
 
 ## Installing
 
-The plugin is not in the Decky store yet. Grab the zip from the [latest release](https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest).
+The plugin is not in the Decky store yet, so Decky installs it straight from a URL. Nothing to download, no USB stick, no SSH.
 
-On the Deck itself:
+1. In game mode, open the Decky menu (the plug icon), then the gear icon.
+2. Turn on **Developer mode**. A **Developer** tab appears in the same settings page.
+3. In that tab, paste this into **Install Plugin from URL** and press install:
 
-1. Download `dont-dimmadeck-vX.Y.Z.zip`, onto the Deck or onto a USB stick.
-2. In game mode, open the Decky menu (the plug icon), then the gear icon, then **Developer mode**.
-3. Turn **Developer mode** on. A **Developer** tab appears in the same settings page.
-4. Under **Install Plugin from Zip**, pick the file.
+```
+https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest/download/dont-dimmadeck.zip
+```
+
+That link always resolves to the newest release, so the same one works for updates. Every release carries a `dont-dimmadeck.zip` under exactly that name for this reason, alongside the versioned copy.
+
+Typing that out on the on-screen keyboard (**Steam + X**) is the tedious part. If you would rather not, the zip and SSH routes below avoid it.
+
+### Other ways in
+
+Download `dont-dimmadeck-vX.Y.Z.zip` from the [latest release](https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest) onto the Deck or a USB stick, then use **Install Plugin from Zip** in the same Developer tab.
 
 Or over SSH from another machine, with [SSH enabled on the Deck](https://wiki.deckbrew.xyz/en/user-guide/ssh-setup):
 
 ```bash
-scp dont-dimmadeck-v1.0.0.zip deck@steamdeck.local:/tmp/
-ssh deck@steamdeck.local 'unzip -o /tmp/dont-dimmadeck-v1.0.0.zip -d ~/homebrew/plugins/'
+curl -LO https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest/download/dont-dimmadeck.zip
+scp dont-dimmadeck.zip deck@steamdeck.local:/tmp/
+ssh deck@steamdeck.local 'unzip -o /tmp/dont-dimmadeck.zip -d ~/homebrew/plugins/'
 ```
 
 Then reload Decky (Decky menu → gear → **Reload**) or reboot.

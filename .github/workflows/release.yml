@@ -47,8 +47,16 @@ jobs:
         id: package
         run: |
           zip_path="$(pnpm --silent package | tail -1)"
+          # A second copy under a fixed name, so
+          # /releases/latest/download/dont-dimmadeck.zip keeps working across
+          # versions. That URL is what the README tells people to paste into
+          # Decky's "Install Plugin from URL", and GitHub matches the asset by
+          # name, so a versioned name alone would break on every release.
+          stable_path="$(dirname "$zip_path")/dont-dimmadeck.zip"
+          cp "$zip_path" "$stable_path"
           echo "path=$zip_path" >> "$GITHUB_OUTPUT"
           echo "name=$(basename "$zip_path")" >> "$GITHUB_OUTPUT"
+          echo "stable=$stable_path" >> "$GITHUB_OUTPUT"
           echo "sha256=$(sha256sum "$zip_path" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Upload the zip as a workflow artifact
@@ -64,6 +72,7 @@ jobs:
           ZIP_PATH: ${{ steps.package.outputs.path }}
           ZIP_NAME: ${{ steps.package.outputs.name }}
           ZIP_SHA: ${{ steps.package.outputs.sha256 }}
+          ZIP_STABLE: ${{ steps.package.outputs.stable }}
         run: |
           # A tag that has landed on master is a real release. A tag cut from a
           # branch is still under review, so it stays a pre-release. The check
@@ -79,10 +88,17 @@ jobs:
           cat > notes.md <<EOF
           ## Installing on a Steam Deck
 
-          1. Download \`$ZIP_NAME\` below, onto the Deck itself or onto a USB stick.
-          2. In game mode, open the Decky menu, then the gear icon, then **Developer mode**.
-          3. Turn on **Developer mode**, then open the **Developer** tab that appears.
-          4. Under **Install Plugin from Zip**, pick the file.
+          In game mode, open the Decky menu, then the gear icon, then turn on
+          **Developer mode**. In the **Developer** tab that appears, paste this
+          into **Install Plugin from URL**:
+
+          \`\`\`
+          https://github.com/JaxonWright/decky-dont-dimmadeck/releases/latest/download/dont-dimmadeck.zip
+          \`\`\`
+
+          That link always resolves to the newest release, so it works for
+          updates too. Otherwise download \`$ZIP_NAME\` below and use
+          **Install Plugin from Zip**.
 
           Or, over SSH from another machine:
 
@@ -118,4 +134,4 @@ jobs:
           if [ "$on_master" = false ]; then
             args+=(--prerelease)
           fi
-          gh release create "$GITHUB_REF_NAME" "$ZIP_PATH" "${args[@]}"
+          gh release create "$GITHUB_REF_NAME" "$ZIP_PATH" "$ZIP_STABLE" "${args[@]}"
