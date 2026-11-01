@@ -283,18 +283,21 @@ export async function applyIdleTimeouts(
     console.warn("[Don't Dimmadeck] SteamClient.System.UpdateSettings is unavailable");
   }
 
-  const setSetting = client.Settings?.SetSetting;
+  // Always called as settings.SetSetting(...), never through a detached
+  // reference: SteamClient methods are CEF bindings that need their `this`,
+  // and an unbound call fails with "Unknown method". See SteamClientApi.
+  const settings = client.Settings;
   const clientSettingsHalves: Array<[IdlePart, (timeouts: IdleTimeouts) => string]> = [
     ["suspend", encodeSuspendSettings],
     ["screensaver", encodeScreensaverSettings],
   ];
   const wantedFromSettings = clientSettingsHalves.filter(([part]) => parts[part]);
-  if (wantedFromSettings.length > 0 && !setSetting) {
+  if (wantedFromSettings.length > 0 && !settings?.SetSetting) {
     console.warn("[Don't Dimmadeck] SteamClient.Settings.SetSetting is unavailable");
-  } else if (setSetting) {
+  } else if (settings?.SetSetting) {
     for (const [part, encode] of wantedFromSettings) {
       try {
-        await setSetting(encode(timeouts));
+        await settings.SetSetting(encode(timeouts));
         applied[part] = true;
       } catch (error) {
         console.error(`[Don't Dimmadeck] failed to set ${part} timeouts`, error);

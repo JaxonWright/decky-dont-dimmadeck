@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ALL_PARTS,
   MESSAGE_PARTS,
   NEVER,
   STEAM_DEFAULTS,
   anyPart,
+  applyIdleTimeouts,
   encodeDimSettings,
   encodeScreensaverSettings,
   encodeSuspendSettings,
@@ -111,6 +113,68 @@ test("restores a zero screensaver verbatim but never a zero dim or suspend", () 
 test("maps each settings message to the halves it speaks for", () => {
   assert.deepEqual([...MESSAGE_PARTS.system], ["dim"]);
   assert.deepEqual([...MESSAGE_PARTS.settings], ["suspend", "screensaver"]);
+});
+
+/**
+ * Steam's SteamClient methods are CEF bindings: called through a detached
+ * reference they reject with "Unknown method", exactly as if the method did not
+ * exist on this build. This fake does the same, so a refactor that loses the
+ * receiver fails here rather than silently on a Deck.
+ */
+function fakeSteamClient() {
+  const calls = { UpdateSettings: [], SetSetting: [] };
+  const bound = (owner, name) =>
+    async function (base64) {
+      if (this !== owner) throw new Error("Unknown method");
+      calls[name].push(base64);
+      return true;
+    };
+  const System = {};
+  System.UpdateSettings = bound(System, "UpdateSettings");
+  const Settings = {};
+  Settings.SetSetting = bound(Settings, "SetSetting");
+  return { client: { System, Settings }, calls };
+}
+
+test("applies each half through its setter, called as a method", async () => {
+  const { client, calls } = fakeSteamClient();
+  globalThis.SteamClient = client;
+  try {
+    const applied = await applyIdleTimeouts(NEVER, ALL_PARTS);
+
+    assert.deepEqual(applied, { dim: true, suspend: true, screensaver: true });
+    assert.equal(calls.UpdateSettings.length, 1);
+    // Suspend and screensaver go as two separate CMsgClientSettings messages.
+    assert.deepEqual(calls.SetSetting, [encodeSuspendSettings(NEVER), encodeScreensaverSettings(NEVER)]);
+  } finally {
+    delete globalThis.SteamClient;
+  }
+});
+
+test("writes only the requested halves and reports only what landed", async () => {
+  const { client, calls } = fakeSteamClient();
+  client.Settings.SetSetting = async function () {
+    throw new Error("boom");
+  };
+  globalThis.SteamClient = client;
+  try {
+    const applied = await applyIdleTimeouts(NEVER, { dim: false, suspend: true, screensaver: true });
+
+    assert.deepEqual(applied, { dim: false, suspend: false, screensaver: false });
+    assert.equal(calls.UpdateSettings.length, 0);
+  } finally {
+    delete globalThis.SteamClient;
+  }
+});
+
+test("reports nothing applied when a setter is missing", async () => {
+  globalThis.SteamClient = { System: {} };
+  try {
+    const applied = await applyIdleTimeouts(NEVER, ALL_PARTS);
+    assert.deepEqual(applied, { dim: false, suspend: false, screensaver: false });
+  } finally {
+    delete globalThis.SteamClient;
+  }
 });
 
 test("compares parts across all three halves", () => {
