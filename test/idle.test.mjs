@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  MESSAGE_PARTS,
   NEVER,
   STEAM_DEFAULTS,
   anyPart,
@@ -10,6 +11,7 @@ import {
   encodeSuspendSettings,
   partsEqual,
   partsIn,
+  restoreTarget,
   sanitizeTimeouts,
 } from "../src/steam/idle.ts";
 import { statusText } from "../src/status.ts";
@@ -77,6 +79,38 @@ test("tells which halves a partial update carries", () => {
     screensaver: false,
   });
   assert.deepEqual(partsIn({}), { dim: false, suspend: false, screensaver: false });
+});
+
+test("restores a zero screensaver verbatim but never a zero dim or suspend", () => {
+  // A user who turned the screensaver off (zero) must get zero back, not five
+  // minutes. Dim and suspend are never genuinely off, so a zero there is a
+  // stranded override and falls back to Steam's defaults.
+  assert.deepEqual(restoreTarget(NEVER), {
+    ...STEAM_DEFAULTS,
+    screensaverBattery: 0,
+    screensaverAc: 0,
+  });
+  const custom = {
+    dimBattery: 60,
+    dimAc: 0,
+    suspendBattery: 0,
+    suspendAc: 7200,
+    screensaverBattery: 45,
+    screensaverAc: 0,
+  };
+  assert.deepEqual(restoreTarget(custom), {
+    dimBattery: 60,
+    dimAc: STEAM_DEFAULTS.dimAc,
+    suspendBattery: STEAM_DEFAULTS.suspendBattery,
+    suspendAc: 7200,
+    screensaverBattery: 45,
+    screensaverAc: 0,
+  });
+});
+
+test("maps each settings message to the halves it speaks for", () => {
+  assert.deepEqual([...MESSAGE_PARTS.system], ["dim"]);
+  assert.deepEqual([...MESSAGE_PARTS.settings], ["suspend", "screensaver"]);
 });
 
 test("compares parts across all three halves", () => {

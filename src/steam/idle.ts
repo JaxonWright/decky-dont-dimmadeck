@@ -87,6 +87,42 @@ export const PART_KEYS: Record<IdlePart, readonly TimeoutKey[]> = {
 const TIMEOUT_KEYS: readonly TimeoutKey[] = IDLE_PARTS.flatMap((part) => PART_KEYS[part]);
 
 /**
+ * Which halves each of Steam's two settings messages carries. A message from
+ * one source speaks for every half it covers, even when it omits a field: the
+ * initial dump from a Steam build without the screensaver simply has no
+ * screensaver fields, and waiting for them would be waiting forever.
+ */
+export const MESSAGE_PARTS = {
+  /** CMsgSystemManagerSettings. */
+  system: ["dim"] as readonly IdlePart[],
+  /** CMsgClientSettings. */
+  settings: ["suspend", "screensaver"] as readonly IdlePart[],
+};
+
+/**
+ * Halves for which a zero is an ordinary setting rather than a stranded
+ * override. Dimming and suspend are never off on a stock Deck, so a zero there
+ * is almost certainly ours; the screensaver is off by default on battery and
+ * commonly turned off on AC, so a zero there is the user's choice and has to
+ * be restored as such.
+ */
+const ZERO_IS_A_SETTING: ReadonlySet<IdlePart> = new Set(["screensaver"]);
+
+/**
+ * The values to put back when handing a half to the user. Restoring a zero
+ * would defeat the point for the halves where it cannot be genuine, so those
+ * fall back to Steam's defaults; the others are restored verbatim.
+ */
+export function restoreTarget(baseline: IdleTimeouts): IdleTimeouts {
+  const target = { ...baseline };
+  for (const part of IDLE_PARTS) {
+    if (ZERO_IS_A_SETTING.has(part)) continue;
+    for (const key of PART_KEYS[part]) target[key] = baseline[key] || STEAM_DEFAULTS[key];
+  }
+  return target;
+}
+
+/**
  * Keys a stored baseline may omit. v2 configs predate the screensaver half, so
  * a baseline written by one carries only the dim and suspend values. The
  * missing ones take Steam's defaults, which is what a never-overridden
@@ -117,10 +153,13 @@ export function sanitizeTimeouts(value: unknown): IdleTimeouts | null {
 
 /**
  * Subscribes to both settings messages, reporting whichever timeouts each
- * update carries. Steam sends partial messages, so callers must merge rather
+ * update carries along with the halves the message's source covers (see
+ * MESSAGE_PARTS). Steam sends partial messages, so callers must merge rather
  * than replace. Returns an unsubscribe function.
  */
-export function watchIdleTimeouts(onChange: (partial: Partial<IdleTimeouts>) => void): () => void {
+export function watchIdleTimeouts(
+  onChange: (partial: Partial<IdleTimeouts>, covered: readonly IdlePart[]) => void,
+): () => void {
   const client = steam();
   const subscriptions: Unregisterable[] = [];
 
@@ -131,7 +170,7 @@ export function watchIdleTimeouts(onChange: (partial: Partial<IdleTimeouts>) => 
     const dimAc = fields.get(FIELD_DIM_AC)?.float;
     if (dimBattery !== undefined) partial.dimBattery = Math.round(dimBattery);
     if (dimAc !== undefined) partial.dimAc = Math.round(dimAc);
-    if (Object.keys(partial).length > 0) onChange(partial);
+    if (Object.keys(partial).length > 0) onChange(partial, MESSAGE_PARTS.system);
   });
   if (system) subscriptions.push(system);
 
@@ -146,7 +185,7 @@ export function watchIdleTimeouts(onChange: (partial: Partial<IdleTimeouts>) => 
     if (suspendAc !== undefined) partial.suspendAc = suspendAc;
     if (screensaverBattery !== undefined) partial.screensaverBattery = screensaverBattery;
     if (screensaverAc !== undefined) partial.screensaverAc = screensaverAc;
-    if (Object.keys(partial).length > 0) onChange(partial);
+    if (Object.keys(partial).length > 0) onChange(partial, MESSAGE_PARTS.settings);
   });
   if (settings) subscriptions.push(settings);
 
@@ -244,23 +283,22 @@ export async function applyIdleTimeouts(
     console.warn("[Don't Dimmadeck] SteamClient.System.UpdateSettings is unavailable");
   }
 
-  const settings = client.Settings;
+  const setSetting = client.Settings?.SetSetting;
   const clientSettingsHalves: Array<[IdlePart, (timeouts: IdleTimeouts) => string]> = [
     ["suspend", encodeSuspendSettings],
     ["screensaver", encodeScreensaverSettings],
   ];
-  for (const [part, encode] of clientSettingsHalves) {
-    if (!parts[part]) {
-      // Nothing to do for this half.
-    } else if (settings?.SetSetting) {
+  const wantedFromSettings = clientSettingsHalves.filter(([part]) => parts[part]);
+  if (wantedFromSettings.length > 0 && !setSetting) {
+    console.warn("[Don't Dimmadeck] SteamClient.Settings.SetSetting is unavailable");
+  } else if (setSetting) {
+    for (const [part, encode] of wantedFromSettings) {
       try {
-        await settings.SetSetting(encode(timeouts));
+        await setSetting(encode(timeouts));
         applied[part] = true;
       } catch (error) {
         console.error(`[Don't Dimmadeck] failed to set ${part} timeouts`, error);
       }
-    } else {
-      console.warn("[Don't Dimmadeck] SteamClient.Settings.SetSetting is unavailable");
     }
   }
 

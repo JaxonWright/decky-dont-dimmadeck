@@ -11,6 +11,7 @@ import {
   applyIdleTimeouts,
   partsEqual,
   partsIn,
+  restoreTarget,
   watchIdleTimeouts,
 } from "./steam/idle";
 import { watchPowerState } from "./steam/power";
@@ -79,11 +80,14 @@ export class KeepAwakeController {
     });
 
     this.unsubscribers.push(
-      watchIdleTimeouts((partial) => {
+      watchIdleTimeouts((partial, covered) => {
+        // A message speaks for every half its source covers, present or not:
+        // a Steam build without a field never sends it, so it would otherwise
+        // stay pending until the timeout on every single load.
+        for (const part of covered) this.pendingHalves.delete(part);
         const seen = partsIn(partial);
         for (const part of IDLE_PARTS) {
           if (!seen[part]) continue;
-          this.pendingHalves.delete(part);
           // For a half we are overriding, these updates are our own zeroes
           // echoing back; for the others they are the user's real settings.
           if (this.overridden[part]) continue;
@@ -116,24 +120,34 @@ export class KeepAwakeController {
     if (this.abandonInit()) return;
 
     // A previous session was killed mid-override - Steam kept the zeroes, so
-    // the halves it was holding have to be put back.
+    // the halves it was holding have to be put back. Only those halves take
+    // their values from the stored baseline: for the others Steam is still
+    // the authority, and a baseline migrated from an older config carries
+    // defaults, not observations, for halves that config never knew about.
     if (anyPart(this.config.overridden)) {
       console.warn("[Don't Dimmadeck] restoring idle timeouts left over from a previous session");
       this.overridden = { ...this.config.overridden };
-      this.observed = { ...this.observed, ...(this.config.baseline ?? STEAM_DEFAULTS) };
-    } else {
-      // Steam reports its current settings shortly after we subscribe.
-      // Overriding before that lands would snapshot our fallback defaults as
-      // the baseline and lose whatever the user actually had configured, so
-      // give it a moment - but not forever, in case it never arrives.
-      await Promise.race([this.observedReady, sleep(OBSERVE_TIMEOUT_MS)]);
-      if (this.abandonInit()) return;
-      if (this.pendingHalves.size > 0) {
-        console.warn(
-          "[Don't Dimmadeck] Steam did not report its idle timeouts; " +
-            `assuming defaults for ${[...this.pendingHalves].join(", ")}`,
-        );
+      const baseline = this.config.baseline ?? STEAM_DEFAULTS;
+      for (const part of IDLE_PARTS) {
+        if (!this.overridden[part]) continue;
+        for (const key of PART_KEYS[part]) this.observed[key] = baseline[key];
+        // Steam would only echo our own zeroes back for these.
+        this.pendingHalves.delete(part);
       }
+      if (this.pendingHalves.size === 0) this.markObserved();
+    }
+
+    // Steam reports its current settings shortly after we subscribe.
+    // Overriding before that lands would snapshot our fallback defaults as
+    // the baseline and lose whatever the user actually had configured, so
+    // give it a moment - but not forever, in case it never arrives.
+    await Promise.race([this.observedReady, sleep(OBSERVE_TIMEOUT_MS)]);
+    if (this.abandonInit()) return;
+    if (this.pendingHalves.size > 0) {
+      console.warn(
+        "[Don't Dimmadeck] Steam did not report its idle timeouts; " +
+          `assuming defaults for ${[...this.pendingHalves].join(", ")}`,
+      );
     }
 
     this.ready = true;
@@ -288,13 +302,7 @@ export class KeepAwakeController {
     }
 
     if (anyPart(handingBack)) {
-      // Restoring a zero would defeat the point; if that is genuinely what the
-      // user had, Steam's defaults are the safer answer. (The screensaver is
-      // off by default on battery, so there its default is itself zero.)
-      const target = { ...baseline };
-      for (const part of IDLE_PARTS) {
-        for (const key of PART_KEYS[part]) target[key] = baseline[key] || STEAM_DEFAULTS[key];
-      }
+      const target = restoreTarget(baseline);
       const restored = await applyIdleTimeouts(target, handingBack);
       // Only a half that actually landed stops being owed back.
       for (const part of IDLE_PARTS) {

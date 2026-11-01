@@ -89,7 +89,7 @@ The **only apply when** conditions come from two more sources.
 
 *External display* reads `CMsgSystemDisplayManagerState` looking for an enabled, non-internal display. Steam exposes no real dock state at all (`SteamClient.System.Dock` only reports dock firmware updates), so this is the closest signal going, and it has the happy side effect of covering third-party hubs rather than just the official dock. If the display state cannot be read, the condition never fires, which fails towards Steam's normal behaviour instead of pinning the screen on.
 
-Steam persists these settings, so the plugin records whatever it is holding. Lose power mid-override and your timers come back the next time the plugin loads, rather than staying off forever.
+Steam persists these settings, so the plugin records whatever it is holding. Lose power mid-override and your timers come back the next time the plugin loads, rather than staying off forever. A dim or sleep timer recorded as zero is treated as a stranded override and comes back as Steam's default, since neither is ever genuinely off on a stock Deck; a screensaver timer of zero is restored as zero, because the screensaver is off by default on battery and often turned off on AC.
 
 Some apps ask the system not to sleep on their own, VLC and Chrome and mpv among them. If you would rather that happened automatically, [DeckyInhibitScreenSaver](https://github.com/xfangfang/DeckyInhibitScreenSaver) takes that approach instead.
 

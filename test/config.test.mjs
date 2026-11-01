@@ -104,7 +104,8 @@ test("an app with no profile of its own follows the defaults", () => {
 test("rejects a malformed baseline rather than restoring nonsense", () => {
   assert.equal(parseConfig({ baseline: { dimBattery: -1 } }).baseline, null);
   assert.equal(parseConfig({ baseline: "300" }).baseline, null);
-  assert.equal(parseConfig({ baseline: { dimBattery: 300, screensaverAc: -1 } }).baseline, null);
+  const v2 = { dimBattery: 300, dimAc: 300, suspendBattery: 900, suspendAc: 3600 };
+  assert.equal(parseConfig({ baseline: { ...v2, screensaverAc: -1 } }).baseline, null);
   const full = {
     dimBattery: 300,
     dimAc: 300,
