@@ -5,7 +5,7 @@
   "api_version": 1,
   "publish": {
     "tags": ["screen-timeout", "screen-dim", "power", "utility"],
-    "description": "Stop the screen dimming and the Deck going to sleep while your chosen apps are running.",
+    "description": "Stop the screen dimming, the screensaver starting and the Deck going to sleep while your chosen apps are running.",
     "image": "https://raw.githubusercontent.com/JaxonWright/decky-dont-dimmadeck/master/assets/logo.png"
   }
 }

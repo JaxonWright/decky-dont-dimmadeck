@@ -27,12 +27,15 @@ export interface Profile {
   preventDimming: boolean;
   /** Stop the Deck suspending. */
   preventSleep: boolean;
+  /** Stop the screensaver starting. */
+  preventScreensaver: boolean;
   condition: PowerCondition;
 }
 
 export const DEFAULT_PROFILE: Profile = {
   preventDimming: true,
   preventSleep: true,
+  preventScreensaver: true,
   condition: "always",
 };
 
@@ -64,20 +67,28 @@ export function conditionMet(condition: PowerCondition, power: PowerState): bool
 
 /** True when a profile would not actually change anything. */
 export function profileIsNoop(profile: Profile): boolean {
-  return !profile.preventDimming && !profile.preventSleep;
+  return !profile.preventDimming && !profile.preventSleep && !profile.preventScreensaver;
 }
 
 function isPowerCondition(value: unknown): value is PowerCondition {
   return typeof value === "string" && (POWER_CONDITIONS as string[]).includes(value);
 }
 
-/** Coerces an untrusted value from the config file into a profile. */
+/**
+ * Coerces an untrusted value from the config file into a profile.
+ *
+ * A missing toggle reads as on. That is also the v2 migration: profiles
+ * written before the screensaver half existed gain it switched on, matching
+ * the other two, since a screensaver starting mid-show defeats the point of
+ * keeping the screen awake just as much as dimming does.
+ */
 export function sanitizeProfile(value: unknown): Profile | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = value as Record<string, unknown>;
   return {
     preventDimming: candidate.preventDimming !== false,
     preventSleep: candidate.preventSleep !== false,
+    preventScreensaver: candidate.preventScreensaver !== false,
     condition: isPowerCondition(candidate.condition) ? candidate.condition : "always",
   };
 }

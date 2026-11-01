@@ -7,12 +7,19 @@
  * importing it can only run inside the Steam client.
  */
 import { DEFAULT_PROFILE, sanitizeProfile } from "./profile";
-import { NO_PARTS, sanitizeTimeouts } from "./steam/idle";
+import { IDLE_PARTS, NO_PARTS, sanitizeTimeouts } from "./steam/idle";
 
 import type { Profile } from "./profile";
 import type { IdleParts, IdleTimeouts } from "./steam/idle";
 
-export const CONFIG_VERSION = 2;
+/**
+ * v1: apps as `{ "<appid>": "<name>" }`, `inhibit_active` a bare boolean.
+ * v2: per-app profiles, `inhibit_active` an object of halves, `baseline`.
+ * v3: the screensaver half - `preventScreensaver` on profiles, `screensaver`
+ *     in `inhibit_active`, `screensaverBattery`/`screensaverAc` in `baseline`.
+ *     Every v2 field keeps its meaning; the new ones default when absent.
+ */
+export const CONFIG_VERSION = 3;
 
 export interface ManagedApp {
   name: string;
@@ -58,7 +65,7 @@ export interface StoredConfig {
   apps?: unknown;
   global_override?: unknown;
   baseline?: unknown;
-  /** v2: an object of halves. v1: a bare boolean meaning "both". */
+  /** v2+: an object of halves. v1: a bare boolean meaning "both". */
   inhibit_active?: unknown;
 }
 
@@ -93,13 +100,19 @@ export function parseApps(value: unknown): Record<string, ManagedApp> {
   return apps;
 }
 
+/**
+ * A v1 `true` meant both of the halves that existed then. The screensaver half
+ * did not, so a v1 or v2 session cannot have left it overridden, and it stays
+ * false unless recorded.
+ */
 export function parseOverridden(value: unknown): IdleParts {
-  if (value === true) return { dim: true, suspend: true };
+  if (value === true) return { dim: true, suspend: true, screensaver: false };
+  const parts = { ...NO_PARTS };
   if (typeof value === "object" && value !== null) {
     const record = value as Record<string, unknown>;
-    return { dim: record.dim === true, suspend: record.suspend === true };
+    for (const part of IDLE_PARTS) parts[part] = record[part] === true;
   }
-  return { ...NO_PARTS };
+  return parts;
 }
 
 /** Turns whatever was stored into a valid config, defaulting anything broken. */

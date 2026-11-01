@@ -2,7 +2,7 @@
 
 # Don't Dimmadeck
 
-A [Decky](https://github.com/SteamDeckHomebrew/decky-loader) plugin that stops the Steam Deck's screen dimming and the Deck going to sleep while your chosen apps are running.
+A [Decky](https://github.com/SteamDeckHomebrew/decky-loader) plugin that stops the Steam Deck's screen dimming, the screensaver starting and the Deck going to sleep while your chosen apps are running.
 
 Built for the Jackbox Party Packs, where everyone plays on their phones and nobody touches the Deck for twenty minutes at a time. Just as good for YouTube, Netflix, Plex, or anything else you watch rather than play.
 
@@ -55,30 +55,33 @@ Open the Decky menu and pick **Don't Dimmadeck**.
 - **Per-app settings** gives one app its own settings instead of the defaults. Also where you remove an app.
 - **Defaults** apply to every app that has no settings of its own.
 
-Every set of settings has the same three parts:
+Every set of settings has the same four parts:
 
 | Setting | What it does |
 | --- | --- |
 | **Prevent dimming** | Stops the backlight dimming. |
+| **Prevent screensaver** | Stops the SteamOS screensaver starting. |
 | **Prevent sleep** | Stops the Deck suspending. |
 | **Only apply when** | Always, only when plugged in, only with an external display, or only both. |
 
-Dimming and sleep are independent. Stop the Deck sleeping through a long download but let the screen dim anyway, or keep the screen lit for a recipe and still let it drop off eventually.
+Dimming, the screensaver and sleep are independent. Stop the Deck sleeping through a long download but let the screen dim anyway, or keep the screen lit for a recipe and still let it drop off eventually.
 
 Steam's timers go back to your own settings as soon as the app exits, and the plugin only ever writes the ones it changed. Change those settings in Steam while nothing is being kept awake and it notices, restoring the new values next time.
 
 ## Under The Hood
 
-SteamOS drives dimming and auto-sleep from Steam client settings rather than from a logind idle inhibitor, so `systemd-inhibit` has no effect on them. The two timers live in different protobuf messages, written through different setters, and `0` means never.
+SteamOS drives dimming, the screensaver and auto-sleep from Steam client settings rather than from a logind idle inhibitor, so `systemd-inhibit` has no effect on them. The three timers live in two protobuf messages, written through two setters, and `0` means never. Each has a battery and an AC variant.
 
-| Setting | Message | Field | Written via |
-| --- | --- | --- | --- |
-| `idle_backlight_dim_battery_seconds` | `CMsgSystemManagerSettings` | 1 (float) | `SteamClient.System.UpdateSettings` |
-| `idle_backlight_dim_ac_seconds` | `CMsgSystemManagerSettings` | 2 (float) | `SteamClient.System.UpdateSettings` |
-| `system_idle_suspend_battery_sec` | `CMsgClientSettings` | 24003 (int32) | `SteamClient.Settings.SetSetting` |
-| `system_idle_suspend_ac_sec` | `CMsgClientSettings` | 24004 (int32) | `SteamClient.Settings.SetSetting` |
+| Setting | Message | Field | Steam default | Written via |
+| --- | --- | --- | --- | --- |
+| `idle_backlight_dim_battery_seconds` | `CMsgSystemManagerSettings` | 1 (float) | none declared | `SteamClient.System.UpdateSettings` |
+| `idle_backlight_dim_ac_seconds` | `CMsgSystemManagerSettings` | 2 (float) | none declared | `SteamClient.System.UpdateSettings` |
+| `system_idle_suspend_battery_sec` | `CMsgClientSettings` | 24003 (int32) | 900 | `SteamClient.Settings.SetSetting` |
+| `system_idle_suspend_ac_sec` | `CMsgClientSettings` | 24004 (int32) | 3600 | `SteamClient.Settings.SetSetting` |
+| `system_idle_screensaver_battery_sec` | `CMsgClientSettings` | 24008 (int32) | 0 | `SteamClient.Settings.SetSetting` |
+| `system_idle_screensaver_ac_sec` | `CMsgClientSettings` | 24009 (int32) | 300 | `SteamClient.Settings.SetSetting` |
 
-Field numbers come from [SteamDatabase/Protobufs](https://github.com/SteamDatabase/Protobufs). The plugin watches `RegisterForAppLifetimeNotifications` for app starts and stops, zeroes the relevant timers while an enabled app is running, and puts your values back afterwards. Dimming and sleep are tracked separately all the way through, so turning one off never rewrites the other.
+Field numbers, types and defaults come from [SteamDatabase/Protobufs](https://github.com/SteamDatabase/Protobufs): [`steam/steammessages_client_objects.proto`](https://github.com/SteamDatabase/Protobufs/blob/89b77382edac5f747bfc196c2edf8996a7fe92bc/steam/steammessages_client_objects.proto) for `CMsgSystemManagerSettings` and [`steam/steammessages_clientsettings.proto`](https://github.com/SteamDatabase/Protobufs/blob/89b77382edac5f747bfc196c2edf8996a7fe92bc/steam/steammessages_clientsettings.proto) for `CMsgClientSettings`, as of the linked commit. Changes to the first message arrive through `SteamClient.System.RegisterForSettingsChanges` and to the second through `SteamClient.Settings.RegisterForSettingsArrayChanges`. The plugin watches `RegisterForAppLifetimeNotifications` for app starts and stops, zeroes the relevant timers while an enabled app is running, and puts your values back afterwards. Dimming, the screensaver and sleep are tracked separately all the way through, so turning one off never rewrites the others. The suspend and screensaver fields share a message and a setter but are still sent as separate messages, so one failing never misrecords the other.
 
 The **only apply when** conditions come from two more sources.
 
@@ -104,7 +107,7 @@ The [Decky CLI](https://github.com/SteamDeckHomebrew/cli) and Docker are not nee
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # codec, display parsing, conditions, config migration
+pnpm test        # codec, per-half encoding, display parsing, conditions, status text, config migration
 pnpm build       # -> dist/index.js
 pnpm package     # build, then -> out/dont-dimmadeck-v<version>.zip
 pnpm watch       # rebuild on change
@@ -147,13 +150,13 @@ Running the workflow by hand from the Actions tab (**Run workflow**) builds the 
 
 ### Testing
 
-`pnpm test` covers what can be checked away from the hardware: the protobuf codec against known-good bytes, the display-state parsing across every shape `GetState` has been seen to return, the power conditions, and config parsing including the v1 to v2 migration.
+`pnpm test` covers what can be checked away from the hardware: the protobuf codec against known-good bytes, that each timer's encoder writes only its own fields, the display-state parsing across every shape `GetState` has been seen to return, the power conditions, the panel's status line, and config parsing including the v1 to v2 and v2 to v3 migrations.
 
 Everything else needs a Deck in game mode. Whether Steam accepts the messages, whether the timers actually stop, none of that can be proven here. Worth running through by hand after a change:
 
-1. Launch an enabled app, then look at Settings → Display and Settings → Power. Both timers should read as off.
+1. Launch an enabled app, then look at Settings → Display and Settings → Power. All three timers (dim, screensaver, sleep) should read as off.
 2. Exit it. They should go back to whatever they were before.
-3. Turn off **Prevent sleep** but leave **Prevent dimming** on, and confirm only the dim timer moves.
+3. Turn off **Prevent sleep** but leave **Prevent dimming** and **Prevent screensaver** on, and confirm only the dim and screensaver timers move. Then turn off **Prevent screensaver** too and confirm only the dim timer moves.
 4. Set a profile to *only when plugged in*, then unplug. The timers should return to normal.
 5. Restart decky-loader while an app is being kept awake. The timers should be restored on load, not left off.
 
