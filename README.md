@@ -37,10 +37,10 @@ Or over SSH from another machine, with [SSH enabled on the Deck](https://wiki.de
 ```bash
 curl -LO https://dontdimmadeck.jaxon.dev
 scp dont-dimmadeck.zip deck@steamdeck.local:/tmp/
-ssh deck@steamdeck.local 'unzip -o /tmp/dont-dimmadeck.zip -d ~/homebrew/plugins/'
+ssh -t deck@steamdeck.local 'sudo unzip -o /tmp/dont-dimmadeck.zip -d ~/homebrew/plugins/'
 ```
 
-Then reload Decky (Decky menu → gear → **Reload**) or reboot.
+decky-loader makes `~/homebrew/plugins` root-owned, so the unzip needs `sudo`, and `-t` lets it prompt for your password. Then reload Decky (Decky menu → gear → **Reload**) or reboot.
 
 ## Uninstalling
 
@@ -124,7 +124,7 @@ Fastest loop while developing:
 # out/ accumulates old versions, and a glob would upload all of them.
 zip=$(pnpm --silent package | tail -1)
 scp "$zip" deck@steamdeck.local:/tmp/
-ssh deck@steamdeck.local "unzip -o /tmp/$(basename "$zip") -d ~/homebrew/plugins/ && sudo systemctl restart plugin_loader"
+ssh -t deck@steamdeck.local "sudo unzip -o /tmp/$(basename "$zip") -d ~/homebrew/plugins/ && sudo systemctl restart plugin_loader"
 ```
 
 The VS Code tasks in `.vscode/tasks.json` do the same job through the Decky CLI if you prefer them. Copy `.vscode/defsettings.json` to `.vscode/settings.json` and fill in your Deck's IP, user and SSH details first.
