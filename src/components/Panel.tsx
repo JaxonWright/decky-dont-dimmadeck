@@ -2,6 +2,7 @@ import { ButtonItem, DropdownItem, PanelSection, PanelSectionRow, ToggleField } 
 import { useEffect, useState } from "react";
 
 import { DEFAULT_PROFILE, POWER_CONDITIONS, POWER_CONDITION_LABELS, profileIsNoop } from "../profile";
+import { statusText } from "../status";
 
 import type { KeepAwakeController, KeepAwakeState } from "../controller";
 import type { PowerCondition, Profile } from "../profile";
@@ -21,7 +22,7 @@ const CONDITION_OPTIONS = POWER_CONDITIONS.map((condition) => ({
   label: POWER_CONDITION_LABELS[condition],
 }));
 
-/** The three settings that make up a profile, used for defaults and per-app alike. */
+/** The four settings that make up a profile, used for defaults and per-app alike. */
 function ProfileFields({
   profile,
   onChange,
@@ -40,6 +41,13 @@ function ProfileFields({
       </PanelSectionRow>
       <PanelSectionRow>
         <ToggleField
+          label="Prevent screensaver"
+          checked={profile.preventScreensaver}
+          onChange={(checked) => onChange({ ...profile, preventScreensaver: checked })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ToggleField
           label="Prevent sleep"
           checked={profile.preventSleep}
           onChange={(checked) => onChange({ ...profile, preventSleep: checked })}
@@ -54,7 +62,7 @@ function ProfileFields({
         />
       </PanelSectionRow>
       {profileIsNoop(profile) && (
-        <Hint>Both settings are off, so this will not change anything.</Hint>
+        <Hint>All three timers are left alone, so this will not change anything.</Hint>
       )}
     </>
   );
@@ -128,14 +136,6 @@ function PerAppSection({
   );
 }
 
-function statusText(state: KeepAwakeState): string {
-  const { dim, suspend } = state.overridden;
-  if (dim && suspend) return "The screen will not dim and the Deck will not sleep.";
-  if (dim) return "The screen will not dim. Sleep is on Steam's normal timer.";
-  if (suspend) return "The Deck will not sleep. Dimming is on Steam's normal timer.";
-  return "Steam's normal dim and sleep timers apply.";
-}
-
 export function Panel({ controller }: { controller: KeepAwakeController }) {
   const state = useKeepAwakeState(controller);
 
@@ -190,7 +190,7 @@ export function Panel({ controller }: { controller: KeepAwakeController }) {
       </PanelSection>
 
       <PanelSection>
-        <Hint>{statusText(state)}</Hint>
+        <Hint>{statusText(state.overridden)}</Hint>
       </PanelSection>
     </>
   );

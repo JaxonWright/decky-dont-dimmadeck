@@ -1,6 +1,6 @@
 /**
- * Just enough protobuf to read and write the four scalar fields this plugin
- * cares about. Pulling in a real protobuf runtime to set two floats and two
+ * Just enough protobuf to read and write the six scalar fields this plugin
+ * cares about. Pulling in a real protobuf runtime to set two floats and four
  * ints would cost far more than it is worth, and the messages involved
  * (CMsgSystemManagerSettings, CMsgClientSettings) are only ever partially
  * populated anyway - Steam merges whatever fields you send.

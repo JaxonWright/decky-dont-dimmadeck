@@ -2,12 +2,16 @@ import { defaultConfig, loadConfig, saveConfig } from "./config";
 import { DEFAULT_PROFILE, conditionMet } from "./profile";
 import { watchRunningApp } from "./steam/apps";
 import {
+  IDLE_PARTS,
   NEVER,
   NO_PARTS,
+  PART_KEYS,
   STEAM_DEFAULTS,
   anyPart,
   applyIdleTimeouts,
   partsEqual,
+  partsIn,
+  restoreTarget,
   watchIdleTimeouts,
 } from "./steam/idle";
 import { watchPowerState } from "./steam/power";
@@ -15,7 +19,7 @@ import { watchPowerState } from "./steam/power";
 import type { Config, ManagedApp } from "./config";
 import type { PowerState, Profile } from "./profile";
 import type { RunningApp } from "./steam/apps";
-import type { IdleParts, IdleTimeouts } from "./steam/idle";
+import type { IdlePart, IdleParts, IdleTimeouts } from "./steam/idle";
 
 export interface KeepAwakeState {
   ready: boolean;
@@ -40,10 +44,10 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * Owns the decision of which of Steam's idle timers should be overridden, and
  * owns the user's original values while they are.
  *
- * Dimming and sleep are tracked separately throughout: a profile may prevent
- * one without the other, so the two halves are snapshotted, applied and
- * restored independently. Writing a half we are not changing would clobber a
- * setting the user asked us to leave alone.
+ * Dimming, the screensaver and sleep are tracked separately throughout: a
+ * profile may prevent any one without the others, so the three halves are
+ * snapshotted, applied and restored independently. Writing a half we are not
+ * changing would clobber a setting the user asked us to leave alone.
  */
 export class KeepAwakeController {
   private config: Config = defaultConfig();
@@ -63,10 +67,10 @@ export class KeepAwakeController {
   /** Serialises the apply/restore work so overlapping events cannot interleave. */
   private queue: Promise<void> = Promise.resolve();
 
-  /** Resolves once Steam has reported both halves of its idle settings. */
+  /** Resolves once Steam has reported every half of its idle settings. */
   private observedReady!: Promise<void>;
   private markObserved!: () => void;
-  private pendingHalves = new Set(["dim", "suspend"]);
+  private pendingHalves = new Set<IdlePart>(IDLE_PARTS);
 
   async init(): Promise<void> {
     if (this.disposed) return;
@@ -76,25 +80,23 @@ export class KeepAwakeController {
     });
 
     this.unsubscribers.push(
-      watchIdleTimeouts((partial) => {
-        const sawDim = partial.dimBattery !== undefined || partial.dimAc !== undefined;
-        const sawSuspend = partial.suspendBattery !== undefined || partial.suspendAc !== undefined;
-        if (sawDim) this.pendingHalves.delete("dim");
-        if (sawSuspend) this.pendingHalves.delete("suspend");
-        if (this.pendingHalves.size === 0) this.markObserved();
-
-        // For a half we are overriding, these updates are our own zeroes
-        // echoing back; for the other half they are the user's real settings.
-        if (sawDim && !this.overridden.dim) {
-          if (partial.dimBattery !== undefined) this.observed.dimBattery = partial.dimBattery;
-          if (partial.dimAc !== undefined) this.observed.dimAc = partial.dimAc;
-        }
-        if (sawSuspend && !this.overridden.suspend) {
-          if (partial.suspendBattery !== undefined) {
-            this.observed.suspendBattery = partial.suspendBattery;
+      watchIdleTimeouts((partial, covered) => {
+        // A message speaks for every half its source covers, present or not:
+        // a Steam build without a field never sends it, so it would otherwise
+        // stay pending until the timeout on every single load.
+        for (const part of covered) this.pendingHalves.delete(part);
+        const seen = partsIn(partial);
+        for (const part of IDLE_PARTS) {
+          if (!seen[part]) continue;
+          // For a half we are overriding, these updates are our own zeroes
+          // echoing back; for the others they are the user's real settings.
+          if (this.overridden[part]) continue;
+          for (const key of PART_KEYS[part]) {
+            const value = partial[key];
+            if (value !== undefined) this.observed[key] = value;
           }
-          if (partial.suspendAc !== undefined) this.observed.suspendAc = partial.suspendAc;
         }
+        if (this.pendingHalves.size === 0) this.markObserved();
       }),
     );
 
@@ -118,24 +120,34 @@ export class KeepAwakeController {
     if (this.abandonInit()) return;
 
     // A previous session was killed mid-override - Steam kept the zeroes, so
-    // the halves it was holding have to be put back.
+    // the halves it was holding have to be put back. Only those halves take
+    // their values from the stored baseline: for the others Steam is still
+    // the authority, and a baseline migrated from an older config carries
+    // defaults, not observations, for halves that config never knew about.
     if (anyPart(this.config.overridden)) {
       console.warn("[Don't Dimmadeck] restoring idle timeouts left over from a previous session");
       this.overridden = { ...this.config.overridden };
-      this.observed = { ...this.observed, ...(this.config.baseline ?? STEAM_DEFAULTS) };
-    } else {
-      // Steam reports its current settings shortly after we subscribe.
-      // Overriding before that lands would snapshot our fallback defaults as
-      // the baseline and lose whatever the user actually had configured, so
-      // give it a moment - but not forever, in case it never arrives.
-      await Promise.race([this.observedReady, sleep(OBSERVE_TIMEOUT_MS)]);
-      if (this.abandonInit()) return;
-      if (this.pendingHalves.size > 0) {
-        console.warn(
-          "[Don't Dimmadeck] Steam did not report its idle timeouts; " +
-            `assuming defaults for ${[...this.pendingHalves].join(" and ")}`,
-        );
+      const baseline = this.config.baseline ?? STEAM_DEFAULTS;
+      for (const part of IDLE_PARTS) {
+        if (!this.overridden[part]) continue;
+        for (const key of PART_KEYS[part]) this.observed[key] = baseline[key];
+        // Steam would only echo our own zeroes back for these.
+        this.pendingHalves.delete(part);
       }
+      if (this.pendingHalves.size === 0) this.markObserved();
+    }
+
+    // Steam reports its current settings shortly after we subscribe.
+    // Overriding before that lands would snapshot our fallback defaults as
+    // the baseline and lose whatever the user actually had configured, so
+    // give it a moment - but not forever, in case it never arrives.
+    await Promise.race([this.observedReady, sleep(OBSERVE_TIMEOUT_MS)]);
+    if (this.abandonInit()) return;
+    if (this.pendingHalves.size > 0) {
+      console.warn(
+        "[Don't Dimmadeck] Steam did not report its idle timeouts; " +
+          `assuming defaults for ${[...this.pendingHalves].join(", ")}`,
+      );
     }
 
     this.ready = true;
@@ -247,7 +259,11 @@ export class KeepAwakeController {
     const profile = this.activeProfile();
     if (!profile) return { ...NO_PARTS };
     if (!conditionMet(profile.condition, this.power)) return { ...NO_PARTS };
-    return { dim: profile.preventDimming, suspend: profile.preventSleep };
+    return {
+      dim: profile.preventDimming,
+      suspend: profile.preventSleep,
+      screensaver: profile.preventScreensaver,
+    };
   }
 
   private reconcile(): Promise<void> {
@@ -278,35 +294,21 @@ export class KeepAwakeController {
     const held = { ...this.overridden };
     const baseline = { ...(this.config.baseline ?? STEAM_DEFAULTS) };
 
-    const handingBack: IdleParts = {
-      dim: !wanted.dim && held.dim,
-      suspend: !wanted.suspend && held.suspend,
-    };
-    const takingOver: IdleParts = {
-      dim: wanted.dim && !held.dim,
-      suspend: wanted.suspend && !held.suspend,
-    };
+    const handingBack = { ...NO_PARTS };
+    const takingOver = { ...NO_PARTS };
+    for (const part of IDLE_PARTS) {
+      handingBack[part] = !wanted[part] && held[part];
+      takingOver[part] = wanted[part] && !held[part];
+    }
 
     if (anyPart(handingBack)) {
-      // Restoring a zero would defeat the point; if that is genuinely what the
-      // user had, Steam's defaults are the safer answer.
-      const target: IdleTimeouts = {
-        dimBattery: baseline.dimBattery || STEAM_DEFAULTS.dimBattery,
-        dimAc: baseline.dimAc || STEAM_DEFAULTS.dimAc,
-        suspendBattery: baseline.suspendBattery || STEAM_DEFAULTS.suspendBattery,
-        suspendAc: baseline.suspendAc || STEAM_DEFAULTS.suspendAc,
-      };
+      const target = restoreTarget(baseline);
       const restored = await applyIdleTimeouts(target, handingBack);
       // Only a half that actually landed stops being owed back.
-      if (restored.dim) {
-        this.observed.dimBattery = target.dimBattery;
-        this.observed.dimAc = target.dimAc;
-        held.dim = false;
-      }
-      if (restored.suspend) {
-        this.observed.suspendBattery = target.suspendBattery;
-        this.observed.suspendAc = target.suspendAc;
-        held.suspend = false;
+      for (const part of IDLE_PARTS) {
+        if (!restored[part]) continue;
+        for (const key of PART_KEYS[part]) this.observed[key] = target[key];
+        held[part] = false;
       }
       this.overridden = { ...held };
       this.config = { ...this.config, overridden: { ...held } };
@@ -315,19 +317,14 @@ export class KeepAwakeController {
 
     if (!anyPart(takingOver)) return;
 
-    if (takingOver.dim) {
-      baseline.dimBattery = this.observed.dimBattery;
-      baseline.dimAc = this.observed.dimAc;
-    }
-    if (takingOver.suspend) {
-      baseline.suspendBattery = this.observed.suspendBattery;
-      baseline.suspendAc = this.observed.suspendAc;
+    const intended = { ...NO_PARTS };
+    for (const part of IDLE_PARTS) {
+      if (takingOver[part]) {
+        for (const key of PART_KEYS[part]) baseline[key] = this.observed[key];
+      }
+      intended[part] = held[part] || takingOver[part];
     }
 
-    const intended: IdleParts = {
-      dim: held.dim || takingOver.dim,
-      suspend: held.suspend || takingOver.suspend,
-    };
     const previousConfig = this.config;
     this.config = { ...this.config, baseline, overridden: { ...intended } };
 
@@ -342,8 +339,7 @@ export class KeepAwakeController {
     }
 
     const applied = await applyIdleTimeouts(NEVER, takingOver);
-    held.dim = held.dim || applied.dim;
-    held.suspend = held.suspend || applied.suspend;
+    for (const part of IDLE_PARTS) held[part] = held[part] || applied[part];
     this.overridden = { ...held };
 
     if (!partsEqual(held, intended)) {

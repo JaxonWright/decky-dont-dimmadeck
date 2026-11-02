@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { conditionMet, sanitizeProfile } from "../src/profile.ts";
+import { conditionMet, profileIsNoop, sanitizeProfile } from "../src/profile.ts";
 import { encodeBytesField, encodeVarintField } from "../src/steam/protobuf.ts";
 import { externalDisplayFromState } from "../src/steam/power.ts";
 
@@ -89,13 +89,25 @@ test("sanitizes profiles from the config file", () => {
   assert.deepEqual(sanitizeProfile({}), {
     preventDimming: true,
     preventSleep: true,
+    preventScreensaver: true,
     condition: "always",
   });
   assert.deepEqual(sanitizeProfile({ preventSleep: false, condition: "plugged-in" }), {
     preventDimming: true,
     preventSleep: false,
+    preventScreensaver: true,
     condition: "plugged-in",
   });
+  assert.equal(sanitizeProfile({ preventScreensaver: false }).preventScreensaver, false);
+  // A profile is a no-op only once all three toggles are off.
+  assert.equal(
+    profileIsNoop({ preventDimming: false, preventSleep: false, preventScreensaver: true, condition: "always" }),
+    false,
+  );
+  assert.equal(
+    profileIsNoop({ preventDimming: false, preventSleep: false, preventScreensaver: false, condition: "always" }),
+    true,
+  );
   // An unknown condition falls back rather than disabling the profile.
   assert.equal(sanitizeProfile({ condition: "nonsense" }).condition, "always");
   assert.equal(sanitizeProfile(null), null);

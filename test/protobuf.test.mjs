@@ -31,12 +31,23 @@ test("encodes a varint field with a multi-byte key", () => {
   assert.deepEqual(encodeVarintField(24003, 0), [0x98, 0xdc, 0x0b, 0x00]);
 });
 
-test("round-trips the four fields the plugin writes", () => {
+test("encodes the screensaver fields", () => {
+  // Field 24008 (system_idle_screensaver_battery_sec), wire type 0:
+  // key = 24008 << 3 = 192064 = 0x2ee40 -> varint c0 dc 0b, then 0.
+  assert.deepEqual(encodeVarintField(24008, 0), [0xc0, 0xdc, 0x0b, 0x00]);
+  // Field 24009 (system_idle_screensaver_ac_sec): key = 24009 << 3 = 192072,
+  // then 300 as a varint (ac 02).
+  assert.deepEqual(encodeVarintField(24009, 300), [0xc8, 0xdc, 0x0b, 0xac, 0x02]);
+});
+
+test("round-trips the six fields the plugin writes", () => {
   const bytes = [
     ...encodeFloatField(1, 300),
     ...encodeFloatField(2, 600),
     ...encodeVarintField(24003, 900),
     ...encodeVarintField(24004, 3600),
+    ...encodeVarintField(24008, 0),
+    ...encodeVarintField(24009, 300),
   ];
 
   const fields = decodeScalarFields(Uint8Array.from(bytes));
@@ -45,6 +56,8 @@ test("round-trips the four fields the plugin writes", () => {
   assert.equal(fields.get(2)?.float, 600);
   assert.equal(fields.get(24003)?.varint, 900);
   assert.equal(fields.get(24004)?.varint, 3600);
+  assert.equal(fields.get(24008)?.varint, 0);
+  assert.equal(fields.get(24009)?.varint, 300);
 });
 
 test("skips fields it does not understand", () => {

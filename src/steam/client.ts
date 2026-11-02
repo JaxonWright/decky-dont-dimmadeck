@@ -7,6 +7,12 @@
  *
  * Every member is optional: Steam moves these between client builds, and a
  * missing method should degrade to a logged warning, not a crash.
+ *
+ * Always call these as methods on their object (`client.Settings.SetSetting(x)`).
+ * They are CEF bindings that dispatch on `this`; a detached reference
+ * (`const f = client.Settings.SetSetting; f(x)`) rejects with "Unknown method"
+ * even though the method exists, which looks exactly like an unsupported
+ * Steam build. test/idle.test.mjs guards against it.
  */
 
 export interface Unregisterable {

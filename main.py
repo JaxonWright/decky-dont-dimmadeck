@@ -7,15 +7,20 @@ import decky
 
 CONFIG_PATH = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "config.json")
 
-# Kept in sync with DEFAULT_CONFIG in src/config.ts. The frontend validates and
+# Kept in sync with defaultConfig() in src/config-schema.ts. The frontend validates and
 # fills in anything missing, so this side only has to be valid JSON.
 DEFAULT_CONFIG: dict[str, Any] = {
-    "version": 2,
-    "defaults": {"preventDimming": True, "preventSleep": True, "condition": "always"},
+    "version": 3,
+    "defaults": {
+        "preventDimming": True,
+        "preventSleep": True,
+        "preventScreensaver": True,
+        "condition": "always",
+    },
     "apps": {},
     "global_override": False,
     "baseline": None,
-    "inhibit_active": {"dim": False, "suspend": False},
+    "inhibit_active": {"dim": False, "suspend": False, "screensaver": False},
 }
 
 
